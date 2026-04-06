@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        display: ['DM Serif Display', 'Georgia', 'serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -46,6 +50,11 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        invoice: {
+          header: "hsl(var(--invoice-header))",
+          "header-foreground": "hsl(var(--invoice-header-foreground))",
+          accent: "hsl(var(--invoice-accent))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
