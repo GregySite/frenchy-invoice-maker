@@ -2,27 +2,31 @@ import { useRef, useState } from "react";
 import { InvoiceData, defaultInvoice } from "@/types/invoice";
 import InvoiceForm from "@/components/InvoiceForm";
 import InvoicePreview from "@/components/InvoicePreview";
-import { Button } from "@/components/ui/button";
-import { Download, FileText, Eye } from "lucide-react";
+import { FileText, Eye, LogOut } from "lucide-react";
 import ExportDialog from "@/components/ExportDialog";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import AuthForm from "@/components/AuthForm";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import InvoiceHistory from "@/components/InvoiceHistory";
 
 export default function Index() {
+  const { user, loading, signOut } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceData>(defaultInvoice);
   const [view, setView] = useState<"form" | "preview">("form");
+  const [historyKey, setHistoryKey] = useState(0);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const downloadPDF = async () => {
-    if (!previewRef.current) return;
-    const canvas = await html2canvas(previewRef.current, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pdfW = pdf.internal.pageSize.getWidth();
-    const pdfH = (canvas.height * pdfW) / canvas.width;
-    pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-    pdf.save(`facture-${invoice.invoiceNumber || "brouillon"}.pdf`);
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <FileText className="h-8 w-8 text-invoice-accent animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthForm />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,10 +53,14 @@ export default function Index() {
                 <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             </div>
-            <ExportDialog invoice={invoice} />
-            <Button onClick={downloadPDF} size="sm" className="bg-invoice-accent text-foreground hover:opacity-90 h-8 px-2 sm:px-3 text-xs sm:text-sm">
-              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
-              <span className="hidden sm:inline">PDF</span>
+            <ExportDialog invoice={invoice} onExported={() => setHistoryKey((k) => k + 1)} />
+            <Button
+              onClick={signOut}
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Button>
           </div>
         </div>
@@ -61,10 +69,11 @@ export default function Index() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid lg:grid-cols-[400px_1fr] gap-6">
           {/* Form */}
-          <aside className={`${view === "preview" ? "hidden lg:block" : ""} overflow-y-auto`}>
+          <aside className={`${view === "preview" ? "hidden lg:block" : ""} overflow-y-auto space-y-4`}>
             <div className="bg-card rounded-lg border border-border p-5">
               <InvoiceForm data={invoice} onChange={setInvoice} />
             </div>
+            <InvoiceHistory key={historyKey} onSelect={setInvoice} />
           </aside>
 
           {/* Preview */}
