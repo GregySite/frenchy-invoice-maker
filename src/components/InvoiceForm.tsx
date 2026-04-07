@@ -4,7 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
+
+const HAKTZA_THRESHOLD = 25000; // seuil הקצאה en ₪
 
 interface InvoiceFormProps {
   data: InvoiceData;
