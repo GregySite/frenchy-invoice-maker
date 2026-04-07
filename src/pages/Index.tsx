@@ -4,6 +4,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import InvoicePreview from "@/components/InvoicePreview";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Eye } from "lucide-react";
+import ExportDialog from "@/components/ExportDialog";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -48,6 +49,7 @@ export default function Index() {
                 <Eye className="h-4 w-4" />
               </button>
             </div>
+            <ExportDialog invoice={invoice} />
             <Button onClick={downloadPDF} size="sm" className="bg-invoice-accent text-foreground hover:opacity-90">
               <Download className="h-4 w-4 mr-1" /> PDF
             </Button>
