@@ -31,6 +31,9 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const set = <K extends keyof InvoiceData>(key: K, value: InvoiceData[K]) =>
     onChange({ ...data, [key]: value });
 
+  const subtotal = data.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const needsHaktza = data.currency === "₪" && subtotal >= HAKTZA_THRESHOLD;
+
   const updateItem = (id: string, patch: Partial<InvoiceItem>) => {
     set("items", data.items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   };
