@@ -14,7 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      invoices: {
+        Row: {
+          client_address: string | null
+          client_email: string | null
+          client_name: string | null
+          created_at: string
+          currency: string
+          date: string
+          due_date: string | null
+          id: string
+          invoice_number: string
+          items: Json
+          notes: string | null
+          platform: string
+          platform_status: string
+          sender_address: string | null
+          sender_email: string | null
+          sender_name: string | null
+          sender_phone: string | null
+          sender_siret: string | null
+          updated_at: string
+          user_id: string
+          vat_rate: number
+        }
+        Insert: {
+          client_address?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          currency?: string
+          date: string
+          due_date?: string | null
+          id?: string
+          invoice_number: string
+          items?: Json
+          notes?: string | null
+          platform: string
+          platform_status?: string
+          sender_address?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
+          sender_phone?: string | null
+          sender_siret?: string | null
+          updated_at?: string
+          user_id: string
+          vat_rate?: number
+        }
+        Update: {
+          client_address?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          currency?: string
+          date?: string
+          due_date?: string | null
+          id?: string
+          invoice_number?: string
+          items?: Json
+          notes?: string | null
+          platform?: string
+          platform_status?: string
+          sender_address?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
+          sender_phone?: string | null
+          sender_siret?: string | null
+          updated_at?: string
+          user_id?: string
+          vat_rate?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          address: string | null
+          company_name: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          phone: string | null
+          siret: string | null
+        }
+        Insert: {
+          address?: string | null
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          siret?: string | null
+        }
+        Update: {
+          address?: string | null
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          siret?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
