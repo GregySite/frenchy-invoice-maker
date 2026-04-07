@@ -168,6 +168,19 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         </Field>
       </Section>
 
+      {/* Haktza'a warning */}
+      {needsHaktza && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-orange-500/30 bg-orange-500/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-orange-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-foreground">מספר הקצאה נדרש</p>
+            <p className="text-muted-foreground text-xs mt-0.5">
+              Facture HT ≥ 25 000 ₪ — un numéro d'allocation (הקצאה) sera automatiquement demandé via la plateforme choisie.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Notes */}
       <Section title="Notes">
         <Textarea
