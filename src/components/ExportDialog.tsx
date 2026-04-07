@@ -41,15 +41,45 @@ type ProviderID = (typeof providers)[number]["id"];
 
 interface ExportDialogProps {
   invoice: InvoiceData;
+  onExported?: () => void;
 }
 
-export default function ExportDialog({ invoice }: ExportDialogProps) {
+export default function ExportDialog({ invoice, onExported }: ExportDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState<ProviderID | null>(null);
+
+  const saveInvoice = async (providerId: ProviderID, status: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non authentifié");
+
+    const { error } = await supabase.from("invoices").insert({
+      user_id: user.id,
+      invoice_number: invoice.invoiceNumber || "BROUILLON",
+      date: invoice.date,
+      due_date: invoice.dueDate || null,
+      sender_name: invoice.senderName,
+      sender_address: invoice.senderAddress,
+      sender_phone: invoice.senderPhone,
+      sender_email: invoice.senderEmail,
+      sender_siret: invoice.senderSiret,
+      client_name: invoice.clientName,
+      client_address: invoice.clientAddress,
+      client_email: invoice.clientEmail,
+      items: JSON.parse(JSON.stringify(invoice.items)),
+      vat_rate: invoice.vatRate,
+      notes: invoice.notes,
+      currency: invoice.currency,
+      platform: providerId,
+      platform_status: status,
+    });
+
+    if (error) throw error;
+  };
 
   const handleExport = async (providerId: ProviderID) => {
     setLoading(providerId);
     try {
+      // Export to platform
       const { data, error } = await supabase.functions.invoke("export-invoice", {
         body: { provider: providerId, invoice },
       });
@@ -57,12 +87,22 @@ export default function ExportDialog({ invoice }: ExportDialogProps) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
+      // Save to DB with success status
+      await saveInvoice(providerId, "exported");
+
       toast.success(`Facture exportée vers ${providers.find((p) => p.id === providerId)?.name}`, {
         icon: <CheckCircle className="h-4 w-4 text-emerald-500" />,
       });
       setOpen(false);
+      onExported?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur inconnue";
+      // Save to DB with failed status anyway
+      try {
+        await saveInvoice(providerId, "failed");
+      } catch {
+        // ignore save error
+      }
       toast.error(`Échec de l'export : ${message}`, {
         icon: <AlertCircle className="h-4 w-4 text-destructive" />,
       });
@@ -74,17 +114,17 @@ export default function ExportDialog({ invoice }: ExportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="border-invoice-accent/30 text-invoice-accent hover:bg-invoice-accent/10 h-8 px-2 sm:px-3 text-xs sm:text-sm">
+        <Button size="sm" className="bg-invoice-accent text-foreground hover:opacity-90 h-8 px-2 sm:px-3 text-xs sm:text-sm">
           <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
-          <span className="hidden sm:inline">Exporter</span>
+          <span className="hidden sm:inline">Envoyer</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display">Exporter la facture</DialogTitle>
+          <DialogTitle className="font-display">Envoyer la facture</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground mb-4">
-          Choisissez la plateforme vers laquelle envoyer cette facture.
+          Choisissez la plateforme sur laquelle créer cette facture.
         </p>
         <div className="grid gap-3">
           {providers.map((p) => (
