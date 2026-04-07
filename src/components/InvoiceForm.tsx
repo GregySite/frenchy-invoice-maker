@@ -4,7 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
+
+const HAKTZA_THRESHOLD = 25000; // seuil הקצאה en ₪
 
 interface InvoiceFormProps {
   data: InvoiceData;
@@ -28,6 +30,9 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const set = <K extends keyof InvoiceData>(key: K, value: InvoiceData[K]) =>
     onChange({ ...data, [key]: value });
+
+  const subtotal = data.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const needsHaktza = data.currency === "₪" && subtotal >= HAKTZA_THRESHOLD;
 
   const updateItem = (id: string, patch: Partial<InvoiceItem>) => {
     set("items", data.items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
@@ -162,6 +167,19 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
           />
         </Field>
       </Section>
+
+      {/* Haktza'a warning */}
+      {needsHaktza && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-orange-500/30 bg-orange-500/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-orange-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-foreground">מספר הקצאה נדרש</p>
+            <p className="text-muted-foreground text-xs mt-0.5">
+              Facture HT ≥ 25 000 ₪ — un numéro d'allocation (הקצאה) sera automatiquement demandé via la plateforme choisie.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Notes */}
       <Section title="Notes">
