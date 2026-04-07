@@ -74,8 +74,9 @@ export default function ExportDialog({ invoice }: ExportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="border-invoice-accent/30 text-invoice-accent hover:bg-invoice-accent/10">
-          <Upload className="h-4 w-4 mr-1" /> Exporter
+        <Button size="sm" variant="outline" className="border-invoice-accent/30 text-invoice-accent hover:bg-invoice-accent/10 h-8 px-2 sm:px-3 text-xs sm:text-sm">
+          <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
+          <span className="hidden sm:inline">Exporter</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

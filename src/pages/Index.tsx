@@ -28,30 +28,31 @@ export default function Index() {
     <div className="min-h-screen bg-background">
       {/* Top bar */}
       <header className="border-b border-border bg-card sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-invoice-accent" />
-            <span className="font-display text-lg text-foreground">FacturePro</span>
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-3 sm:px-4 h-12 sm:h-14">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-invoice-accent shrink-0" />
+            <span className="font-display text-sm sm:text-lg text-foreground truncate">FacturePro</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Mobile toggle */}
             <div className="flex lg:hidden border border-border rounded-md overflow-hidden">
               <button
                 onClick={() => setView("form")}
-                className={`px-3 py-1.5 text-sm ${view === "form" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm ${view === "form" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
-                Formulaire
+                Form
               </button>
               <button
                 onClick={() => setView("preview")}
-                className={`px-3 py-1.5 text-sm ${view === "preview" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm ${view === "preview" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
-                <Eye className="h-4 w-4" />
+                <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             </div>
             <ExportDialog invoice={invoice} />
-            <Button onClick={downloadPDF} size="sm" className="bg-invoice-accent text-foreground hover:opacity-90">
-              <Download className="h-4 w-4 mr-1" /> PDF
+            <Button onClick={downloadPDF} size="sm" className="bg-invoice-accent text-foreground hover:opacity-90 h-8 px-2 sm:px-3 text-xs sm:text-sm">
+              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
+              <span className="hidden sm:inline">PDF</span>
             </Button>
           </div>
         </div>
