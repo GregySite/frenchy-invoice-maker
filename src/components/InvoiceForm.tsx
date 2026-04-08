@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
 
-const HAKTZA_THRESHOLD = 25000; // seuil הקצאה en ₪
+const HAKTZA_THRESHOLD = 10000; // seuil הקצאה en ₪ (à partir du 01/01/2026)
 
 interface InvoiceFormProps {
   data: InvoiceData;
