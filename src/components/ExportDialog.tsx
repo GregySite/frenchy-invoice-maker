@@ -9,10 +9,10 @@ import { toast } from "sonner";
 const providers = [
   {
     id: "greeninvoice" as const,
-    name: "Green Invoice (Morning)",
-    description: "חשבונית ירוקה / מורנינג",
+    name: "SmartBee (Green Invoice)",
+    description: "חשבונית ירוקה / סמארטבי",
     color: "bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60",
-    icon: "🌿",
+    icon: "🐝",
   },
   {
     id: "invoice4u" as const,
