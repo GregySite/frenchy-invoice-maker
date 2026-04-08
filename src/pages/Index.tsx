@@ -82,6 +82,10 @@ export default function Index() {
           </main>
         </div>
       </div>
+
+      <footer className="border-t border-border py-3 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} Greg U. Tous droits réservés.
+      </footer>
     </div>
   );
 }
