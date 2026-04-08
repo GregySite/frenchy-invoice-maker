@@ -109,3 +109,15 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Suppression forcée des éléments de marquage Lovable */
+.lovable-badge, 
+#lovable-badge,
+[data-lovable-badge],
+.built-with-lovable,
+div[class*="lovable"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
