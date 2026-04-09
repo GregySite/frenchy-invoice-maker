@@ -3,7 +3,7 @@ import { InvoiceData, defaultInvoice } from "@/types/invoice";
 import InvoiceForm from "@/components/InvoiceForm";
 import InvoicePreview from "@/components/InvoicePreview";
 import { FileText, Eye, LogOut } from "lucide-react";
-import ExportDialog from "@/components/ExportDialog";
+import ExportButton from "@/components/ExportButton";
 import AuthForm from "@/components/AuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export default function Index() {
                 <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             </div>
-            <ExportDialog invoice={invoice} onExported={() => setHistoryKey((k) => k + 1)} />
+            <ExportButton invoice={invoice} onExported={() => setHistoryKey((k) => k + 1)} />
             <Button
               onClick={signOut}
               size="sm"
