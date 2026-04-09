@@ -9,6 +9,8 @@ export interface InvoiceData {
   invoiceNumber: string;
   date: string;
   dueDate: string;
+  // Type de document
+  documentType: string;
   // Émetteur
   senderName: string;
   senderAddress: string;
@@ -33,6 +35,7 @@ export const defaultInvoice: InvoiceData = {
   invoiceNumber: '',
   date: new Date().toISOString().split('T')[0],
   dueDate: '',
+  documentType: '320', // Facture + Reçu par défaut
   senderName: '',
   senderAddress: '',
   senderPhone: '',
