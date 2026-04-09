@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Settings, Loader2, Check, Eye, EyeOff } from "lucide-react";
+import { Settings, Loader2, Check, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -15,32 +15,33 @@ import {
 
 export default function SmartBeeSettings() {
   const [open, setOpen] = useState(false);
-  const [apiKey, setApiKey] = useState("");
+  const [apiId, setApiId] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showKey, setShowKey] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
   const [hasKey, setHasKey] = useState(false);
 
   useEffect(() => {
-    if (open) loadKey();
+    if (open) loadKeys();
   }, [open]);
 
-  const loadKey = async () => {
+  const loadKeys = async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("smartbee_api_key")
+        .select("smartbee_api_key, smartbee_api_secret")
         .eq("id", user.id)
         .single();
       if (data?.smartbee_api_key) {
-        setApiKey(data.smartbee_api_key);
+        setApiId(data.smartbee_api_key);
         setHasKey(true);
-      } else {
-        setApiKey("");
-        setHasKey(false);
+      }
+      if (data?.smartbee_api_secret) {
+        setApiSecret(data.smartbee_api_secret);
       }
     } catch {
       // ignore
@@ -50,8 +51,8 @@ export default function SmartBeeSettings() {
   };
 
   const handleSave = async () => {
-    if (!apiKey.trim()) {
-      toast.error("Veuillez entrer votre clé API");
+    if (!apiId.trim() || !apiSecret.trim()) {
+      toast.error("Veuillez renseigner l'ID et le Secret");
       return;
     }
     setSaving(true);
@@ -60,11 +61,14 @@ export default function SmartBeeSettings() {
       if (!user) throw new Error("Non connecté");
       const { error } = await supabase
         .from("profiles")
-        .update({ smartbee_api_key: apiKey.trim() })
+        .update({
+          smartbee_api_key: apiId.trim(),
+          smartbee_api_secret: apiSecret.trim(),
+        })
         .eq("id", user.id);
       if (error) throw error;
       setHasKey(true);
-      toast.success("Clé API SmartBee enregistrée ✓");
+      toast.success("Compte SmartBee connecté ✓");
       setOpen(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur";
@@ -91,7 +95,7 @@ export default function SmartBeeSettings() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-invoice-accent" />
-            Connexion SmartBee
+            Connecter SmartBee
           </DialogTitle>
         </DialogHeader>
         {loading ? (
@@ -100,36 +104,67 @@ export default function SmartBeeSettings() {
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Entrez votre clé API SmartBee (Green Invoice) pour pouvoir exporter vos factures.
-              Vous la trouverez dans votre compte SmartBee sous Paramètres → API.
-            </p>
+
+            {/* Instructions */}
+            <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Comment trouver vos identifiants :</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Connectez-vous sur SmartBee (Green Invoice)</li>
+                <li>Allez dans <span className="font-medium text-foreground">Paramètres → Outils développeur → Clés API</span></li>
+                <li>Créez une nouvelle clé API</li>
+                <li>Copiez l'<span className="font-medium text-foreground">ID</span> et le <span className="font-medium text-foreground">Secret</span> ci-dessous</li>
+              </ol>
+              <a
+                href="https://app.greeninvoice.co.il/settings/api"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-invoice-accent hover:underline mt-1"
+              >
+                Ouvrir SmartBee <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+
+            {/* ID */}
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Clé API</Label>
+              <Label className="text-xs text-muted-foreground">ID de la clé API</Label>
+              <Input
+                type="text"
+                value={apiId}
+                onChange={(e) => setApiId(e.target.value)}
+                placeholder="ex: a1b2c3d4-e5f6-..."
+                autoComplete="off"
+              />
+            </div>
+
+            {/* Secret */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Secret</Label>
               <div className="relative">
                 <Input
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Votre clé API SmartBee"
+                  type={showSecret ? "text" : "password"}
+                  value={apiSecret}
+                  onChange={(e) => setApiSecret(e.target.value)}
+                  placeholder="Votre secret SmartBee"
                   className="pr-10"
+                  autoComplete="off"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowKey(!showKey)}
+                  onClick={() => setShowSecret(!showSecret)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
+
             <Button
               onClick={handleSave}
               disabled={saving}
               className="w-full bg-invoice-accent text-foreground hover:opacity-90"
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Enregistrer
+              Connecter mon compte SmartBee
             </Button>
           </div>
         )}
