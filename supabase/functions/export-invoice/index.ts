@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -11,7 +13,6 @@ interface InvoiceItem {
 }
 
 interface ExportRequest {
-  provider: "greeninvoice";
   invoice: {
     invoiceNumber: string;
     date: string;
@@ -31,11 +32,31 @@ interface ExportRequest {
   };
 }
 
-async function exportToSmartBee(invoice: ExportRequest["invoice"]) {
-  const apiKey = Deno.env.get("SMARTBEE_API_KEY");
-  if (!apiKey) throw new Error("SMARTBEE_API_KEY is not configured");
+async function getSmartBeeApiKey(authHeader: string): Promise<string> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // SmartBee / Green Invoice uses the API key directly as bearer token
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error("Non authentifié");
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("smartbee_api_key")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !data?.smartbee_api_key) {
+    throw new Error("Clé API SmartBee non configurée. Allez dans les paramètres pour l'ajouter.");
+  }
+
+  return data.smartbee_api_key;
+}
+
+async function exportToSmartBee(invoice: ExportRequest["invoice"], apiKey: string) {
   const docRes = await fetch("https://api.greeninvoice.co.il/api/v1/documents", {
     method: "POST",
     headers: {
@@ -77,6 +98,14 @@ serve(async (req) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Non authentifié" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body: ExportRequest = await req.json();
     const { invoice } = body;
 
@@ -87,7 +116,8 @@ serve(async (req) => {
       });
     }
 
-    const result = await exportToSmartBee(invoice);
+    const apiKey = await getSmartBeeApiKey(authHeader);
+    const result = await exportToSmartBee(invoice, apiKey);
 
     return new Response(JSON.stringify({ success: true, data: result }), {
       status: 200,
