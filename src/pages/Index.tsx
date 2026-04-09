@@ -4,6 +4,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import InvoicePreview from "@/components/InvoicePreview";
 import { FileText, Eye, LogOut } from "lucide-react";
 import ExportButton from "@/components/ExportButton";
+import SmartBeeSettings from "@/components/SmartBeeSettings";
 import AuthForm from "@/components/AuthForm";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export default function Index() {
               </button>
             </div>
             <ExportButton invoice={invoice} onExported={() => setHistoryKey((k) => k + 1)} />
+            <SmartBeeSettings />
             <Button
               onClick={signOut}
               size="sm"
