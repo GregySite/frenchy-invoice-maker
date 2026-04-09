@@ -6,7 +6,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
 
-const HAKTZA_THRESHOLD = 10000; // seuil הקצאה en ₪ (à partir du 01/01/2026)
+const HAKTZA_THRESHOLD = 10000;
+
+export const DOCUMENT_TYPES = [
+  { value: "320", label: "Facture + Reçu", hebrew: "חשבונית קבלה" },
+  { value: "305", label: "Facture TVA", hebrew: "חשבונית מס" },
+  { value: "400", label: "Reçu", hebrew: "קבלה" },
+  { value: "330", label: "Avoir / Crédit", hebrew: "זיכוי" },
+  { value: "100", label: "Devis", hebrew: "הצעת מחיר" },
+  { value: "200", label: "Bon de commande", hebrew: "הזמנה" },
+];
 
 interface InvoiceFormProps {
   data: InvoiceData;
@@ -48,6 +57,29 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
   return (
     <div className="space-y-6">
+
+      {/* Type de document */}
+      <Section title="Type de document">
+        <Field label="Type">
+          <Select
+            value={data.documentType ?? "320"}
+            onValueChange={(v) => set("documentType", v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Choisir un type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {DOCUMENT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  <span>{t.label}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">— {t.hebrew}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </Section>
+
       {/* Infos facture */}
       <Section title="Informations">
         <div className="grid grid-cols-2 gap-3">
