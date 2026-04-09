@@ -19,6 +19,7 @@ interface ExportRequest {
     invoiceNumber: string;
     date: string;
     dueDate: string;
+    documentType: string;
     senderName: string;
     senderAddress: string;
     senderPhone: string;
@@ -95,7 +96,7 @@ async function exportToSmartBee(
       Authorization: `Bearer ${jwtToken}`,
     },
     body: JSON.stringify({
-      type: 320, // חשבונית קבלה — Facture + Reçu (le plus courant pour עוסק פטור/מורשה)
+      type: Number(invoice.documentType) || 320,
       client: {
         name: invoice.clientName,
         address: invoice.clientAddress,
