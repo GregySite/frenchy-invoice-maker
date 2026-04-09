@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { InvoiceData, InvoiceItem } from "@/types/invoice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -5,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import ClientSearch from "@/components/ClientSearch";
+import { useSmartBeeData, SmartBeeClient } from "@/hooks/useSmartBeeData";
 
 const HAKTZA_THRESHOLD = 10000;
 
@@ -40,6 +43,23 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const set = <K extends keyof InvoiceData>(key: K, value: InvoiceData[K]) =>
     onChange({ ...data, [key]: value });
 
+  // Charge les données SmartBee (compte + clients)
+  const { account, clients, loading: sbLoading } = useSmartBeeData(true);
+
+  // Pré-remplit l'émetteur depuis le compte SmartBee (une seule fois, si vide)
+  useEffect(() => {
+    if (!account) return;
+    if (data.senderName) return; // déjà rempli, on ne touche pas
+    onChange({
+      ...data,
+      senderName:    account.name    ?? data.senderName,
+      senderAddress: account.address ?? data.senderAddress,
+      senderPhone:   account.phone   ?? data.senderPhone,
+      senderEmail:   account.email   ?? data.senderEmail,
+      senderSiret:   account.taxId   ?? data.senderSiret,
+    });
+  }, [account]);
+
   const subtotal = data.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const needsHaktza = data.currency === "₪" && subtotal >= HAKTZA_THRESHOLD;
 
@@ -53,6 +73,16 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
   const removeItem = (id: string) => {
     if (data.items.length > 1) set("items", data.items.filter((i) => i.id !== id));
+  };
+
+  // Quand on sélectionne un client existant depuis SmartBee
+  const handleClientSelect = (client: SmartBeeClient) => {
+    onChange({
+      ...data,
+      clientName:    client.name,
+      clientAddress: client.address ?? "",
+      clientEmail:   client.emails?.[0] ?? "",
+    });
   };
 
   return (
@@ -107,8 +137,8 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         </div>
       </Section>
 
-      {/* Émetteur */}
-      <Section title="Émetteur">
+      {/* Émetteur — pré-rempli depuis SmartBee */}
+      <Section title={sbLoading ? "Émetteur (chargement…)" : "Émetteur"}>
         <Field label="Nom / Société">
           <Input value={data.senderName} onChange={(e) => set("senderName", e.target.value)} />
         </Field>
@@ -128,10 +158,16 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         </Field>
       </Section>
 
-      {/* Client */}
+      {/* Client — avec auto-complétion SmartBee */}
       <Section title="Client">
         <Field label="Nom / Société">
-          <Input value={data.clientName} onChange={(e) => set("clientName", e.target.value)} />
+          <ClientSearch
+            value={data.clientName}
+            onChange={(v) => set("clientName", v)}
+            onSelect={handleClientSelect}
+            clients={clients}
+            placeholder={clients.length > 0 ? `Rechercher parmi ${clients.length} clients…` : "Nom du client"}
+          />
         </Field>
         <Field label="Adresse">
           <Input value={data.clientAddress} onChange={(e) => set("clientAddress", e.target.value)} />
