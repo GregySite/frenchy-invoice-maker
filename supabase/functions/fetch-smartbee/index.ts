@@ -66,9 +66,9 @@ serve(async (req) => {
     if (resource === "account") {
       data = await giFetch("/account", apiKey);
     } else if (resource === "clients") {
-      data = await giFetch("/clients?page=1&per_page=100", apiKey);
+      data = await giFetch("/clients/search", apiKey, { page: 1, pageSize: 100 });
     } else if (resource === "items") {
-      data = await giFetch("/items?page=1&per_page=100", apiKey);
+      data = await giFetch("/items/search", apiKey, { page: 1, pageSize: 100 });
     } else {
       throw new Error(`Ressource inconnue : ${resource}`);
     }
