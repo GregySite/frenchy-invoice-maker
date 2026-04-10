@@ -97,6 +97,8 @@ export type Database = {
           phone: string | null
           siret: string | null
           smartbee_api_key: string | null
+          smartbee_api_secret: string | null
+          smartbee_connected: boolean | null
         }
         Insert: {
           address?: string | null
@@ -108,6 +110,8 @@ export type Database = {
           phone?: string | null
           siret?: string | null
           smartbee_api_key?: string | null
+          smartbee_api_secret?: string | null
+          smartbee_connected?: boolean | null
         }
         Update: {
           address?: string | null
@@ -119,6 +123,8 @@ export type Database = {
           phone?: string | null
           siret?: string | null
           smartbee_api_key?: string | null
+          smartbee_api_secret?: string | null
+          smartbee_connected?: boolean | null
         }
         Relationships: []
       }
