@@ -58,6 +58,7 @@ export default function InvoiceHistory({ onSelect }: Props) {
     invoiceNumber: row.invoice_number,
     date: row.date,
     dueDate: row.due_date || "",
+    documentType: "320",
     senderName: row.sender_name || "",
     senderAddress: row.sender_address || "",
     senderPhone: row.sender_phone || "",

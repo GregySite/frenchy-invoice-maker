@@ -15,11 +15,10 @@ import {
 
 export default function SmartBeeSettings() {
   const [open, setOpen] = useState(false);
-  const [apiId, setApiId] = useState("");
-  const [apiSecret, setApiSecret] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [connected, setConnected] = useState(false);
 
   // Vérifie l'état connecté au montage (pour la coche dans la barre)
@@ -28,11 +27,11 @@ export default function SmartBeeSettings() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase
+      const { data } = await supabase
           .from("profiles")
           .select("smartbee_connected")
           .eq("id", user.id)
-          .single();
+          .single() as { data: { smartbee_connected?: boolean } | null };
         setConnected(data?.smartbee_connected === true);
       } catch { /* ignore */ }
     };
@@ -51,11 +50,10 @@ export default function SmartBeeSettings() {
       if (!user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("smartbee_api_key, smartbee_api_secret, smartbee_connected")
+        .select("smartbee_api_key, smartbee_connected")
         .eq("id", user.id)
-        .single();
-      if (data?.smartbee_api_key) setApiId(data.smartbee_api_key);
-      if (data?.smartbee_api_secret) setApiSecret(data.smartbee_api_secret);
+        .single() as { data: { smartbee_api_key?: string; smartbee_connected?: boolean } | null };
+      if (data?.smartbee_api_key) setApiKey(data.smartbee_api_key);
       setConnected(data?.smartbee_connected === true);
     } catch {
       // ignore
@@ -65,8 +63,8 @@ export default function SmartBeeSettings() {
   };
 
   const handleSave = async () => {
-    if (!apiId.trim() || !apiSecret.trim()) {
-      toast.error("Veuillez renseigner l'ID et le Secret");
+    if (!apiKey.trim()) {
+      toast.error("Veuillez renseigner votre clé API");
       return;
     }
     setSaving(true);
@@ -75,11 +73,10 @@ export default function SmartBeeSettings() {
       if (!user) throw new Error("Non connecté");
 
       // 1. Sauvegarde les credentials
-      const { error: saveError } = await supabase
-        .from("profiles")
+      const { error: saveError } = await (supabase
+        .from("profiles") as any)
         .update({
-          smartbee_api_key: apiId.trim(),
-          smartbee_api_secret: apiSecret.trim(),
+          smartbee_api_key: apiKey.trim(),
           smartbee_connected: false,
         })
         .eq("id", user.id);
@@ -98,8 +95,8 @@ export default function SmartBeeSettings() {
       }
 
       // 3. Credentials valides → marque comme connecté
-      await supabase
-        .from("profiles")
+      await (supabase
+        .from("profiles") as any)
         .update({ smartbee_connected: true })
         .eq("id", user.id);
 
@@ -169,7 +166,7 @@ export default function SmartBeeSettings() {
                 <li>Copiez l'<span className="font-medium text-foreground">ID</span> et le <span className="font-medium text-foreground">Secret</span> ci-dessous</li>
               </ol>
               <a
-                href="https://app.greeninvoice.co.il/settings/api"
+                href="https://app.smartbee.co.il/settings/api"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-invoice-accent hover:underline mt-1"
@@ -178,36 +175,24 @@ export default function SmartBeeSettings() {
               </a>
             </div>
 
-            {/* ID */}
+            {/* Clé API */}
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">ID de la clé API</Label>
-              <Input
-                type="text"
-                value={apiId}
-                onChange={(e) => setApiId(e.target.value)}
-                placeholder="ex: a1b2c3d4-e5f6-..."
-                autoComplete="off"
-              />
-            </div>
-
-            {/* Secret */}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Secret</Label>
+              <Label className="text-xs text-muted-foreground">Clé API</Label>
               <div className="relative">
                 <Input
-                  type={showSecret ? "text" : "password"}
-                  value={apiSecret}
-                  onChange={(e) => setApiSecret(e.target.value)}
-                  placeholder="Votre secret SmartBee"
+                  type={showKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Votre clé API SmartBee"
                   className="pr-10"
                   autoComplete="off"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowSecret(!showSecret)}
+                  onClick={() => setShowKey(!showKey)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
