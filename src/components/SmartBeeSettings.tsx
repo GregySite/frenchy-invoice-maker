@@ -73,12 +73,12 @@ export default function SmartBeeSettings() {
       if (!user) throw new Error("Non connecté");
 
       // 1. Sauvegarde les credentials
-      const { error: saveError } = await supabase
-        .from("profiles")
+      const { error: saveError } = await (supabase
+        .from("profiles") as any)
         .update({
           smartbee_api_key: apiKey.trim(),
           smartbee_connected: false,
-        } as Record<string, unknown>)
+        })
         .eq("id", user.id);
       if (saveError) throw saveError;
 
@@ -95,9 +95,9 @@ export default function SmartBeeSettings() {
       }
 
       // 3. Credentials valides → marque comme connecté
-      await supabase
-        .from("profiles")
-        .update({ smartbee_connected: true } as Record<string, unknown>)
+      await (supabase
+        .from("profiles") as any)
+        .update({ smartbee_connected: true })
         .eq("id", user.id);
 
       setConnected(true);
