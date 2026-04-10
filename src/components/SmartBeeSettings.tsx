@@ -166,7 +166,7 @@ export default function SmartBeeSettings() {
                 <li>Copiez l'<span className="font-medium text-foreground">ID</span> et le <span className="font-medium text-foreground">Secret</span> ci-dessous</li>
               </ol>
               <a
-                href="https://app.smartbee.co.il/settings/api"
+                href="https://app.greeninvoice.co.il/settings/api"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-invoice-accent hover:underline mt-1"
