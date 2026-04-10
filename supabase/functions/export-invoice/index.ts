@@ -35,8 +35,8 @@ interface ExportRequest {
   };
 }
 
-// Récupère l'ID et le Secret depuis Supabase
-async function getSmartBeeCredentials(authHeader: string): Promise<{ id: string; secret: string }> {
+// Récupère la clé API depuis le profil utilisateur
+async function getSmartBeeApiKey(authHeader: string): Promise<string> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -48,40 +48,21 @@ async function getSmartBeeCredentials(authHeader: string): Promise<{ id: string;
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("smartbee_api_key, smartbee_api_secret")
+    .select("smartbee_api_key")
     .eq("id", user.id)
     .single();
 
-  if (error || !data?.smartbee_api_key || !data?.smartbee_api_secret) {
+  if (error || !data?.smartbee_api_key) {
     throw new Error("Compte SmartBee non connecté. Cliquez sur l'icône ⚙️ pour configurer.");
   }
 
-  return { id: data.smartbee_api_key, secret: data.smartbee_api_secret };
-}
-
-// Échange ID + Secret contre un JWT Bearer token
-async function getJwtToken(id: string, secret: string): Promise<string> {
-  const res = await fetch(`${GREENINVOICE_BASE}/account/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, secret }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Authentification SmartBee échouée [${res.status}]: ${err}`);
-  }
-
-  const data = await res.json();
-  if (!data.token) throw new Error("Token SmartBee introuvable dans la réponse");
-
-  return data.token;
+  return data.smartbee_api_key;
 }
 
 // Crée le document dans Green Invoice
 async function exportToSmartBee(
   invoice: ExportRequest["invoice"],
-  jwtToken: string
+  apiKey: string
 ) {
   const currencyMap: Record<string, string> = {
     "₪": "ILS",
@@ -93,7 +74,7 @@ async function exportToSmartBee(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${jwtToken}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       type: Number(invoice.documentType) || 320,
@@ -146,14 +127,11 @@ serve(async (req) => {
       });
     }
 
-    // 1. Récupérer les credentials depuis Supabase
-    const { id, secret } = await getSmartBeeCredentials(authHeader);
+    // 1. Récupérer la clé API depuis le profil
+    const apiKey = await getSmartBeeApiKey(authHeader);
 
-    // 2. Obtenir un JWT frais auprès de Green Invoice
-    const jwtToken = await getJwtToken(id, secret);
-
-    // 3. Créer le document
-    const result = await exportToSmartBee(body.invoice, jwtToken);
+    // 2. Créer le document
+    const result = await exportToSmartBee(body.invoice, apiKey);
 
     return new Response(JSON.stringify({ success: true, data: result }), {
       status: 200,
