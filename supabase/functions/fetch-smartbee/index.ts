@@ -31,16 +31,18 @@ async function getApiKey(authHeader: string): Promise<string> {
 }
 
 // Appel générique à l'API Green Invoice avec la clé API directement
-async function giFetch(path: string, apiKey: string) {
+async function giFetch(path: string, apiKey: string, body?: unknown) {
   const res = await fetch(`${GREENINVOICE_BASE}${path}`, {
+    method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`GI ${path} [${res.status}]: ${body}`);
+    const text = await res.text();
+    throw new Error(`GI ${path} [${res.status}]: ${text}`);
   }
   return await res.json();
 }
@@ -64,9 +66,9 @@ serve(async (req) => {
     if (resource === "account") {
       data = await giFetch("/account", apiKey);
     } else if (resource === "clients") {
-      data = await giFetch("/clients?page=1&per_page=100", apiKey);
+      data = await giFetch("/clients/search", apiKey, { page: 1, pageSize: 100 });
     } else if (resource === "items") {
-      data = await giFetch("/items?page=1&per_page=100", apiKey);
+      data = await giFetch("/items/search", apiKey, { page: 1, pageSize: 100 });
     } else {
       throw new Error(`Ressource inconnue : ${resource}`);
     }
