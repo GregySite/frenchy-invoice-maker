@@ -57,7 +57,14 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Non authentifié");
 
     const url = new URL(req.url);
-    const resource = url.searchParams.get("resource") ?? "clients";
+    let resource = url.searchParams.get("resource");
+
+    if (!resource && req.method !== "GET") {
+      const requestBody = await req.json().catch(() => null) as { resource?: string } | null;
+      resource = requestBody?.resource;
+    }
+
+    resource ??= "clients";
 
     const apiKey = await getApiKey(authHeader);
 

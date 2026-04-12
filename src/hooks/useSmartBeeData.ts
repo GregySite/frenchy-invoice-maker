@@ -39,10 +39,7 @@ export function useSmartBeeData(enabled: boolean): SmartBeeData {
       try {
         // Infos du compte
         const { data: accData, error: accErr } = await supabase.functions.invoke("fetch-smartbee", {
-          body: null,
-          headers: {},
-          // @ts-ignore
-          query: { resource: "account" },
+          body: { resource: "account" },
         });
         if (!accErr && accData?.success) {
           const a = accData.data;
@@ -57,10 +54,7 @@ export function useSmartBeeData(enabled: boolean): SmartBeeData {
 
         // Clients
         const { data: cliData, error: cliErr } = await supabase.functions.invoke("fetch-smartbee", {
-          body: null,
-          headers: {},
-          // @ts-ignore
-          query: { resource: "clients" },
+          body: { resource: "clients" },
         });
         if (!cliErr && cliData?.success) {
           const list = cliData.data?.items ?? cliData.data ?? [];

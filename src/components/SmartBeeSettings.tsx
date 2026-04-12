@@ -23,8 +23,7 @@ export default function SmartBeeSettings() {
 
   const verifyStoredApiKey = async () => {
     const { data, error } = await supabase.functions.invoke("fetch-smartbee", {
-      // @ts-ignore
-      query: { resource: "account" },
+      body: { resource: "account" },
     });
 
     return !error && data?.success === true;
@@ -118,8 +117,7 @@ export default function SmartBeeSettings() {
 
       // 2. Teste les credentials via l'Edge Function
       const { data, error } = await supabase.functions.invoke("fetch-smartbee", {
-        // @ts-ignore
-        query: { resource: "account" },
+        body: { resource: "account" },
       });
 
       if (error || !data?.success) {
