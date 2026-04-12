@@ -87,7 +87,7 @@ export default function SmartBeeSettings() {
 
       setApiKey(apiKey.trim());
       setHasSavedApiKey(true);
-      setConnected(true);
+      setConnected(false);
       toast.success("Clé API SmartBee enregistrée ✓");
       setOpen(false);
 
