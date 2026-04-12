@@ -33,16 +33,55 @@ export function useSmartBeeData(enabled: boolean): SmartBeeData {
   useEffect(() => {
     if (!enabled) return;
 
+    let cancelled = false;
+
     const fetchAll = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Infos du compte
-        const { data: accData, error: accErr } = await supabase.functions.invoke("fetch-smartbee", {
-          body: { resource: "account" },
-        });
-        if (!accErr && accData?.success) {
-          const a = accData.data;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          if (!cancelled) {
+            setAccount(null);
+            setClients([]);
+          }
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("smartbee_connected")
+          .eq("id", user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        if (!profile?.smartbee_connected) {
+          if (!cancelled) {
+            setAccount(null);
+            setClients([]);
+          }
+          return;
+        }
+
+        const [accountResponse, clientsResponse] = await Promise.all([
+          supabase.functions.invoke("fetch-smartbee", {
+            body: { resource: "account" },
+          }),
+          supabase.functions.invoke("fetch-smartbee", {
+            body: { resource: "clients" },
+          }),
+        ]);
+
+        const accountMessage = accountResponse.error?.message ?? accountResponse.data?.error;
+        const clientsMessage = clientsResponse.error?.message ?? clientsResponse.data?.error;
+
+        if (accountMessage || clientsMessage) {
+          throw new Error(accountMessage ?? clientsMessage ?? "Erreur");
+        }
+
+        if (!cancelled && accountResponse.data?.success) {
+          const a = accountResponse.data.data;
           setAccount({
             name: a.name ?? "",
             address: a.address ?? "",
@@ -52,12 +91,8 @@ export function useSmartBeeData(enabled: boolean): SmartBeeData {
           });
         }
 
-        // Clients
-        const { data: cliData, error: cliErr } = await supabase.functions.invoke("fetch-smartbee", {
-          body: { resource: "clients" },
-        });
-        if (!cliErr && cliData?.success) {
-          const list = cliData.data?.items ?? cliData.data ?? [];
+        if (!cancelled && clientsResponse.data?.success) {
+          const list = clientsResponse.data.data?.items ?? clientsResponse.data.data ?? [];
           setClients(list.map((c: Record<string, unknown>) => ({
             id: String(c.id ?? ""),
             name: String(c.name ?? ""),
@@ -67,13 +102,21 @@ export function useSmartBeeData(enabled: boolean): SmartBeeData {
           })));
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Erreur");
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Erreur");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchAll();
+    void fetchAll();
+
+    return () => {
+      cancelled = true;
+    };
   }, [enabled]);
 
   return { account, clients, loading, error };

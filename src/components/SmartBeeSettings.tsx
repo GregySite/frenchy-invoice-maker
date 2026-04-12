@@ -20,54 +20,36 @@ export default function SmartBeeSettings() {
   const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
 
-  const verifyStoredApiKey = async () => {
-    const { data, error } = await supabase.functions.invoke("fetch-smartbee", {
-      body: { resource: "account" },
-    });
+  const hydrateFromProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setApiKey("");
+        setHasSavedApiKey(false);
+        setConnected(false);
+        return;
+      }
 
-    return !error && data?.success === true;
+      const { data } = await supabase
+        .from("profiles")
+        .select("smartbee_api_key, smartbee_connected")
+        .eq("id", user.id)
+        .single() as { data: { smartbee_api_key?: string | null; smartbee_connected?: boolean | null } | null };
+
+      const storedKey = data?.smartbee_api_key?.trim() ?? "";
+      setApiKey(storedKey);
+      setHasSavedApiKey(Boolean(storedKey));
+      setConnected(Boolean(data?.smartbee_connected));
+    } catch {
+      // ignore
+    }
   };
 
-  const syncConnectionState = async (
-    userId: string,
-    storedApiKey?: string | null,
-    storedConnected?: boolean | null,
-  ) => {
-    if (!storedApiKey?.trim()) {
-      setConnected(false);
-      return false;
-    }
-
-    const isConnected = await verifyStoredApiKey();
-    setConnected(isConnected);
-
-    if (storedConnected !== isConnected) {
-      await (supabase.from("profiles") as any)
-        .update({ smartbee_connected: isConnected })
-        .eq("id", userId);
-    }
-
-    return isConnected;
-  };
-
-  // Vérifie l'état connecté au montage (pour la coche dans la barre)
+  // Hydrate uniquement l'état local pour éviter des vérifications API inutiles
   useEffect(() => {
-    const checkConnected = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data } = await supabase
-          .from("profiles")
-          .select("smartbee_api_key, smartbee_connected")
-          .eq("id", user.id)
-          .single() as { data: { smartbee_api_key?: string; smartbee_connected?: boolean } | null };
-
-        await syncConnectionState(user.id, data?.smartbee_api_key, data?.smartbee_connected);
-      } catch { /* ignore */ }
-    };
-    checkConnected();
+    void hydrateFromProfile();
   }, []);
 
   // Charge les credentials quand le dialog s'ouvre
@@ -78,18 +60,7 @@ export default function SmartBeeSettings() {
   const loadKeys = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("smartbee_api_key, smartbee_connected")
-        .eq("id", user.id)
-        .single() as { data: { smartbee_api_key?: string; smartbee_connected?: boolean } | null };
-
-      setApiKey(data?.smartbee_api_key ?? "");
-      await syncConnectionState(user.id, data?.smartbee_api_key, data?.smartbee_connected);
-    } catch {
-      // ignore
+      await hydrateFromProfile();
     } finally {
       setLoading(false);
     }
@@ -105,7 +76,6 @@ export default function SmartBeeSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non connecté");
 
-      // 1. Sauvegarde la clé API
       const { error: saveError } = await (supabase
         .from("profiles") as any)
         .update({
@@ -115,25 +85,10 @@ export default function SmartBeeSettings() {
         .eq("id", user.id);
       if (saveError) throw saveError;
 
-      // 2. Teste les credentials via l'Edge Function
-      const { data, error } = await supabase.functions.invoke("fetch-smartbee", {
-        body: { resource: "account" },
-      });
-
-      if (error || !data?.success) {
-        setConnected(false);
-        toast.error("Clé API invalide — vérifiez votre clé SmartBee");
-        return;
-      }
-
-      // 3. Credentials valides → marque comme connecté
-      await (supabase
-        .from("profiles") as any)
-        .update({ smartbee_connected: true })
-        .eq("id", user.id);
-
+      setApiKey(apiKey.trim());
+      setHasSavedApiKey(true);
       setConnected(true);
-      toast.success("Compte SmartBee connecté ✓");
+      toast.success("Clé API SmartBee enregistrée ✓");
       setOpen(false);
 
     } catch (err: unknown) {
@@ -156,6 +111,8 @@ export default function SmartBeeSettings() {
           <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           {connected ? (
             <Check className="h-2.5 w-2.5 text-green-500 absolute -top-0.5 -right-0.5" />
+          ) : hasSavedApiKey ? (
+            <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-invoice-accent" />
           ) : (
             <X className="h-2.5 w-2.5 text-red-400 absolute -top-0.5 -right-0.5" />
           )}
@@ -165,7 +122,7 @@ export default function SmartBeeSettings() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-invoice-accent" />
-            Connecter SmartBee
+            Configurer SmartBee
           </DialogTitle>
         </DialogHeader>
         {loading ? (
@@ -179,12 +136,17 @@ export default function SmartBeeSettings() {
             {connected ? (
               <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm text-emerald-400">
                 <Check className="h-4 w-4 shrink-0" />
-                Compte SmartBee connecté et vérifié
+                Clé API SmartBee enregistrée
+              </div>
+            ) : hasSavedApiKey ? (
+              <div className="flex items-center gap-2 rounded-lg border border-invoice-accent/20 bg-invoice-accent/10 px-3 py-2 text-sm text-foreground">
+                <Settings className="h-4 w-4 shrink-0 text-invoice-accent" />
+                Clé API enregistrée — vérification automatique désactivée pour éviter de consommer du crédit
               </div>
             ) : (
               <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
                 <X className="h-4 w-4 shrink-0" />
-                Non connecté — renseignez votre clé API ci-dessous
+                Aucune clé API enregistrée — renseignez-la ci-dessous
               </div>
             )}
 
@@ -237,10 +199,10 @@ export default function SmartBeeSettings() {
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Vérification en cours…
+                  Enregistrement…
                 </>
               ) : (
-                "Connecter mon compte SmartBee"
+                "Enregistrer ma clé API"
               )}
             </Button>
           </div>
