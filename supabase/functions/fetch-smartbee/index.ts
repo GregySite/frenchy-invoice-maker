@@ -35,7 +35,7 @@ async function giFetch(path: string, apiKey: string, body?: unknown) {
   const res = await fetch(`${GREENINVOICE_BASE}${path}`, {
     method: body ? "POST" : "GET",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
       "Content-Type": "application/json",
     },
     ...(body ? { body: JSON.stringify(body) } : {}),

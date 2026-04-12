@@ -21,18 +21,51 @@ export default function SmartBeeSettings() {
   const [showKey, setShowKey] = useState(false);
   const [connected, setConnected] = useState(false);
 
+  const verifyStoredApiKey = async () => {
+    const { data, error } = await supabase.functions.invoke("fetch-smartbee", {
+      // @ts-ignore
+      query: { resource: "account" },
+    });
+
+    return !error && data?.success === true;
+  };
+
+  const syncConnectionState = async (
+    userId: string,
+    storedApiKey?: string | null,
+    storedConnected?: boolean | null,
+  ) => {
+    if (!storedApiKey?.trim()) {
+      setConnected(false);
+      return false;
+    }
+
+    const isConnected = await verifyStoredApiKey();
+    setConnected(isConnected);
+
+    if (storedConnected !== isConnected) {
+      await (supabase.from("profiles") as any)
+        .update({ smartbee_connected: isConnected })
+        .eq("id", userId);
+    }
+
+    return isConnected;
+  };
+
   // Vérifie l'état connecté au montage (pour la coche dans la barre)
   useEffect(() => {
     const checkConnected = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-      const { data } = await supabase
+
+        const { data } = await supabase
           .from("profiles")
-          .select("smartbee_connected")
+          .select("smartbee_api_key, smartbee_connected")
           .eq("id", user.id)
-          .single() as { data: { smartbee_connected?: boolean } | null };
-        setConnected(data?.smartbee_connected === true);
+          .single() as { data: { smartbee_api_key?: string; smartbee_connected?: boolean } | null };
+
+        await syncConnectionState(user.id, data?.smartbee_api_key, data?.smartbee_connected);
       } catch { /* ignore */ }
     };
     checkConnected();
@@ -53,8 +86,9 @@ export default function SmartBeeSettings() {
         .select("smartbee_api_key, smartbee_connected")
         .eq("id", user.id)
         .single() as { data: { smartbee_api_key?: string; smartbee_connected?: boolean } | null };
-      if (data?.smartbee_api_key) setApiKey(data.smartbee_api_key);
-      setConnected(data?.smartbee_connected === true);
+
+      setApiKey(data?.smartbee_api_key ?? "");
+      await syncConnectionState(user.id, data?.smartbee_api_key, data?.smartbee_connected);
     } catch {
       // ignore
     } finally {
@@ -72,7 +106,7 @@ export default function SmartBeeSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non connecté");
 
-      // 1. Sauvegarde les credentials
+      // 1. Sauvegarde la clé API
       const { error: saveError } = await (supabase
         .from("profiles") as any)
         .update({
@@ -90,7 +124,7 @@ export default function SmartBeeSettings() {
 
       if (error || !data?.success) {
         setConnected(false);
-        toast.error("ID ou Secret invalide — vérifiez vos identifiants SmartBee");
+        toast.error("Clé API invalide — vérifiez votre clé SmartBee");
         return;
       }
 
@@ -152,18 +186,18 @@ export default function SmartBeeSettings() {
             ) : (
               <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
                 <X className="h-4 w-4 shrink-0" />
-                Non connecté — renseignez vos identifiants ci-dessous
+                Non connecté — renseignez votre clé API ci-dessous
               </div>
             )}
 
             {/* Instructions */}
             <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Comment trouver vos identifiants :</p>
+              <p className="font-medium text-foreground">Comment trouver votre clé API :</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
                 <li>Connectez-vous sur SmartBee (Green Invoice)</li>
                 <li>Allez dans <span className="font-medium text-foreground">Paramètres → Outils développeur → Clés API</span></li>
                 <li>Créez une nouvelle clé API</li>
-                <li>Copiez l'<span className="font-medium text-foreground">ID</span> et le <span className="font-medium text-foreground">Secret</span> ci-dessous</li>
+                <li>Copiez la <span className="font-medium text-foreground">clé API</span> ci-dessous</li>
               </ol>
               <a
                 href="https://smartbee.co.il/pc/dealer/update-details/updateUser_api_configuration"
