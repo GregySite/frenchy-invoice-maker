@@ -74,7 +74,7 @@ async function exportToSmartBee(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
     },
     body: JSON.stringify({
       type: Number(invoice.documentType) || 320,

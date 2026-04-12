@@ -35,7 +35,7 @@ async function giFetch(path: string, apiKey: string, body?: unknown) {
   const res = await fetch(`${GREENINVOICE_BASE}${path}`, {
     method: body ? "POST" : "GET",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "x-api-key": apiKey,
       "Content-Type": "application/json",
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -57,7 +57,14 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Non authentifié");
 
     const url = new URL(req.url);
-    const resource = url.searchParams.get("resource") ?? "clients";
+    let resource = url.searchParams.get("resource");
+
+    if (!resource && req.method !== "GET") {
+      const requestBody = await req.json().catch(() => null) as { resource?: string } | null;
+      resource = requestBody?.resource;
+    }
+
+    resource ??= "clients";
 
     const apiKey = await getApiKey(authHeader);
 
