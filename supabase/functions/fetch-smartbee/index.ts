@@ -6,7 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Note : L'URL peut varier. Si ça échoue, essaye sans le "/api/v1" ou avec "https://api.smartbee.co.il"
 const SMARTBEE_BASE = "https://server.smartbee.co.il/api/v1";
 
 serve(async (req) => {
@@ -26,20 +25,14 @@ serve(async (req) => {
     const apiKey = profile?.smartbee_api_key;
     if (!apiKey) throw new Error("Clé introuvable");
 
-    // Tentative de vérification sur l'un des rares endpoints GET de Smartbee
-    // Si l'API est capricieuse, on tente un POST vide sur une route de test
+    // Smartbee attend la clé API dans le corps de la requête JSON
     const res = await fetch(`${SMARTBEE_BASE}/user/me`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKey: apiKey })
     });
 
-    // On accepte la réussite si Smartbee répond positivement
-    if (!res.ok) {
-      const errorDetail = await res.text();
-      console.error("Smartbee rejection:", errorDetail);
-      throw new Error("Clé rejetée par Smartbee");
-    }
+    if (!res.ok) throw new Error("Clé invalide");
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
