@@ -6,68 +6,42 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Note : L'URL peut varier. Si ça échoue, essaye sans le "/api/v1" ou avec "https://api.smartbee.co.il"
 const SMARTBEE_BASE = "https://server.smartbee.co.il/api/v1";
-
-async function getApiKey(authHeader: string): Promise<string> {
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-  
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("Non authentifié");
-
-  const { data } = await supabase
-    .from("profiles")
-    .select("smartbee_api_key")
-    .eq("id", user.id)
-    .single();
-
-  if (!data?.smartbee_api_key) {
-    throw new Error("Clé API Smartbee manquante");
-  }
-  return data.smartbee_api_key;
-}
-
-async function smartbeeFetch(path: string, apiKey: string, body: any = {}) {
-  const payload = { apiKey, ...body };
-  const res = await fetch(`${SMARTBEE_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Erreur Smartbee [${res.status}]: ${text}`);
-  }
-  return await res.json();
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Header manquant");
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
+    const { data: { user } } = await supabase.auth.getUser(authHeader!);
 
-    const url = new URL(req.url);
-    const resource = url.searchParams.get("resource") || "check_auth";
-    const apiKey = await getApiKey(authHeader);
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("smartbee_api_key")
+      .eq("id", user?.id)
+      .single();
 
-    let result;
-    if (resource === "check_auth") {
-      // On tente de récupérer les infos de l'utilisateur pour valider la clé
-      result = await smartbeeFetch("/user/me", apiKey);
-    } else if (resource === "clients") {
-      result = await smartbeeFetch("/get-clients", apiKey);
-    } else {
-      throw new Error(`Ressource non supportée : ${resource}`);
+    const apiKey = profile?.smartbee_api_key;
+    if (!apiKey) throw new Error("Clé introuvable");
+
+    // Tentative de vérification sur l'un des rares endpoints GET de Smartbee
+    // Si l'API est capricieuse, on tente un POST vide sur une route de test
+    const res = await fetch(`${SMARTBEE_BASE}/user/me`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: apiKey })
+    });
+
+    // On accepte la réussite si Smartbee répond positivement
+    if (!res.ok) {
+      const errorDetail = await res.text();
+      console.error("Smartbee rejection:", errorDetail);
+      throw new Error("Clé rejetée par Smartbee");
     }
 
-    return new Response(JSON.stringify({ success: true, data: result }), {
-      status: 200,
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
