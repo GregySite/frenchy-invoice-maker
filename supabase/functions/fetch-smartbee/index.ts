@@ -77,24 +77,29 @@ serve(async (req) => {
 
     // Adaptation des routes selon les besoins de ton interface
     switch (resource) {
-      case "check_auth":
-        // Endpoint typique pour vérifier si la clé est valide
-        result = await smartbeeFetch("/test-auth", apiKey);
-        break;
-      
-      case "clients":
-        // Route Smartbee pour récupérer les clients
-        result = await smartbeeFetch("/get-clients", apiKey, { count: 100 });
-        break;
-
-      case "items":
-        // Route Smartbee pour récupérer les articles/services
-        result = await smartbeeFetch("/get-items", apiKey);
-        break;
-
-      default:
-        throw new Error(`Ressource non supportée : ${resource}`);
+  case "check_auth":
+    try {
+      // On tente d'appeler un endpoint simple de Smartbee pour tester la clé
+      const result = await smartbeeFetch("/user/me", apiKey); 
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "Connexion Smartbee réussie !", 
+        user: result.name 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "La clé API est refusée par Smartbee." 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    break;
+  // ... reste du code
+}
 
     return new Response(JSON.stringify({ success: true, data: result }), {
       status: 200,
