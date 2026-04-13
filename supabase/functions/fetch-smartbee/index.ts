@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SMARTBEE_BASE = "https://server.smartbee.co.il/api/v1";
+const SMARTBEE_BASE = "https://api.smartbee.co.il/api/v1";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
