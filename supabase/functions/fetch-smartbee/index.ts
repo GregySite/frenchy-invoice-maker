@@ -25,36 +25,24 @@ serve(async (req) => {
     const apiKey = profile?.smartbee_api_key?.trim();
     if (!apiKey) throw new Error("Clé manquante");
 
-    // ÉTAPE 1 : Authentification (Mandatory selon ton Swagger)
-    // On envoie la clé pour récupérer un jeton de session
-    const authRes = await fetch(`${SMARTBEE_BASE}/Login/authenticate`, {
+    // Étape 1 : Authentification simple
+    const authResponse = await fetch(`${SMARTBEE_BASE}/Login/authenticate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKey: apiKey })
     });
 
-    const authData = await authRes.json();
+    const authData = await authResponse.json();
 
-    if (!authRes.ok || !authData.token) {
-      throw new Error("Échec de l'authentification initiale chez Smartbee");
+    // Si on a un token, c'est que la clé est valide ! 
+    // On n'a même pas besoin de tester User/Me pour le voyant vert.
+    if (authResponse.ok && authData.token) {
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } else {
+      throw new Error("Clé refusée par le serveur d'authentification");
     }
-
-    // ÉTAPE 2 : Test de la session
-    // Maintenant on utilise le jeton reçu (Bearer) pour appeler User/Me
-    const testRes = await fetch(`${SMARTBEE_BASE}/User/Me`, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authData.token}` 
-      },
-      body: JSON.stringify({}) // Plus besoin d'apiKey ici, le token suffit
-    });
-
-    if (!testRes.ok) throw new Error("Jeton obtenu mais refusé par le serveur");
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
 
   } catch (err: any) {
     return new Response(JSON.stringify({ success: false, error: err.message }), {
