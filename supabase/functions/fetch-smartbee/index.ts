@@ -6,7 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SMARTBEE_BASE = "https://api.smartbee.co.il/api/v1";
+// LA BONNE URL ICI
+const SMARTBEE_BASE = "https://webapi.smartbee.co.il/api/v1";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -23,16 +24,16 @@ serve(async (req) => {
       .single();
 
     const apiKey = profile?.smartbee_api_key;
-    if (!apiKey) throw new Error("Clé introuvable");
+    if (!apiKey) throw new Error("Clé manquante dans le profil");
 
-    // Smartbee attend la clé API dans le corps de la requête JSON
-    const res = await fetch(`${SMARTBEE_BASE}/categories`, { // On demande juste les catégories, c'est inoffensif
+    // Test sur l'endpoint des infos utilisateur
+    const res = await fetch(`${SMARTBEE_BASE}/user/me`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKey: apiKey.trim() })
     });
 
-    if (!res.ok) throw new Error("Clé invalide");
+    if (!res.ok) throw new Error("Clé refusée par Smartbee");
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
