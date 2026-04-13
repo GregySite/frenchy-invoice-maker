@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// LA BONNE URL ICI
-const SMARTBEE_BASE = "https://webapi.smartbee.co.il/api/v1";
+// URL API Smartbee corrigée
+const SMARTBEE_BASE = "https://smartbee.co.il/api/v1";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -23,17 +23,25 @@ serve(async (req) => {
       .eq("id", user?.id)
       .single();
 
-    const apiKey = profile?.smartbee_api_key;
-    if (!apiKey) throw new Error("Clé manquante dans le profil");
+    const apiKey = profile?.smartbee_api_key?.trim();
+    if (!apiKey) throw new Error("Clé manquante");
 
-    // Test sur l'endpoint des infos utilisateur
+    // Smartbee demande souvent la clé dans le JSON du POST
     const res = await fetch(`${SMARTBEE_BASE}/user/me`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: apiKey.trim() })
+      body: JSON.stringify({ apiKey })
     });
 
-    if (!res.ok) throw new Error("Clé refusée par Smartbee");
+    if (!res.ok) {
+      // Si /user/me échoue, on tente une route plus simple
+      const backupRes = await fetch(`${SMARTBEE_BASE}/get-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey })
+      });
+      if (!backupRes.ok) throw new Error("Clé rejetée par Smartbee");
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
