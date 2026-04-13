@@ -26,10 +26,10 @@ serve(async (req) => {
     if (!apiKey) throw new Error("Clé introuvable");
 
     // Smartbee attend la clé API dans le corps de la requête JSON
-    const res = await fetch(`${SMARTBEE_BASE}/user/me`, {
+    const res = await fetch(`${SMARTBEE_BASE}/categories`, { // On demande juste les catégories, c'est inoffensif
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: apiKey })
+      body: JSON.stringify({ apiKey: apiKey.trim() })
     });
 
     if (!res.ok) throw new Error("Clé invalide");
