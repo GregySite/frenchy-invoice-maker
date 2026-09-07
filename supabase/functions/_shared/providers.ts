@@ -235,7 +235,6 @@ const invoice4u = {
           Name: i.description,
           Quantity: Number(i.quantity || 0),
           Price: Number(i.unitPrice || 0),
-challenge: undefined,
         })),
         Total: total,
       },
