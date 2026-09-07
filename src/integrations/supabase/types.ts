@@ -22,11 +22,16 @@ export type Database = {
           created_at: string
           currency: string
           date: string
+          document_type: string | null
           due_date: string | null
+          error_message: string | null
+          external_id: string | null
+          external_number: string | null
           id: string
           invoice_number: string
           items: Json
           notes: string | null
+          pdf_url: string | null
           platform: string
           platform_status: string
           sender_address: string | null
@@ -45,11 +50,16 @@ export type Database = {
           created_at?: string
           currency?: string
           date: string
+          document_type?: string | null
           due_date?: string | null
+          error_message?: string | null
+          external_id?: string | null
+          external_number?: string | null
           id?: string
           invoice_number: string
           items?: Json
           notes?: string | null
+          pdf_url?: string | null
           platform: string
           platform_status?: string
           sender_address?: string | null
@@ -68,11 +78,16 @@ export type Database = {
           created_at?: string
           currency?: string
           date?: string
+          document_type?: string | null
           due_date?: string | null
+          error_message?: string | null
+          external_id?: string | null
+          external_number?: string | null
           id?: string
           invoice_number?: string
           items?: Json
           notes?: string | null
+          pdf_url?: string | null
           platform?: string
           platform_status?: string
           sender_address?: string | null
@@ -122,6 +137,45 @@ export type Database = {
           siret?: string | null
           smartbee_api_key?: string | null
           smartbee_connected?: boolean | null
+        }
+        Relationships: []
+      }
+      provider_credentials: {
+        Row: {
+          created_at: string
+          credentials: Json
+          id: string
+          is_default: boolean
+          last_check_error: string | null
+          last_check_ok: boolean | null
+          last_checked_at: string | null
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credentials?: Json
+          id?: string
+          is_default?: boolean
+          last_check_error?: string | null
+          last_check_ok?: boolean | null
+          last_checked_at?: string | null
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credentials?: Json
+          id?: string
+          is_default?: boolean
+          last_check_error?: string | null
+          last_check_ok?: boolean | null
+          last_checked_at?: string | null
+          provider?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
