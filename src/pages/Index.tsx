@@ -1,23 +1,28 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { InvoiceData, defaultInvoice } from "@/types/invoice";
 import InvoiceForm from "@/components/InvoiceForm";
 import InvoicePreview from "@/components/InvoicePreview";
-import { FileText, Eye, LogOut } from "lucide-react";
+import { FileText, Eye, LogOut, ShieldCheck } from "lucide-react";
 import ExportButton from "@/components/ExportButton";
-import SmartBeeSettings from "@/components/SmartBeeSettings";
+import ProviderSettings from "@/components/ProviderSettings";
 import AuthForm from "@/components/AuthForm";
+import PendingAccount from "@/components/PendingAccount";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { Button } from "@/components/ui/button";
 import InvoiceHistory from "@/components/InvoiceHistory";
 
 export default function Index() {
   const { user, loading, signOut } = useAuth();
+  const { status, isAdmin, loading: statusLoading } = useAccountStatus(user?.id);
   const [invoice, setInvoice] = useState<InvoiceData>(defaultInvoice);
   const [view, setView] = useState<"form" | "preview">("form");
   const [historyKey, setHistoryKey] = useState(0);
+  const [providersKey, setProvidersKey] = useState(0);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  if (loading) {
+  if (loading || (user && statusLoading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <FileText className="h-8 w-8 text-invoice-accent animate-pulse" />
@@ -27,6 +32,10 @@ export default function Index() {
 
   if (!user) {
     return <AuthForm />;
+  }
+
+  if (status !== "active" && !isAdmin) {
+    return <PendingAccount status={status === "suspended" ? "suspended" : "pending"} onSignOut={signOut} />;
   }
 
   return (
@@ -54,8 +63,17 @@ export default function Index() {
                 <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
             </div>
-            <ExportButton invoice={invoice} onExported={() => setHistoryKey((k) => k + 1)} />
-            <SmartBeeSettings />
+            <ExportButton
+              invoice={invoice}
+              refreshKey={providersKey}
+              onExported={() => setHistoryKey((k) => k + 1)}
+            />
+            <ProviderSettings onChanged={() => setProvidersKey((k) => k + 1)} />
+            {isAdmin && (
+              <Link to="/admin" className="text-muted-foreground hover:text-foreground p-2" title="Administration">
+                <ShieldCheck className="h-4 w-4" />
+              </Link>
+            )}
             <Button
               onClick={signOut}
               size="sm"
