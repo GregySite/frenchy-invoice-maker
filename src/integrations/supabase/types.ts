@@ -103,6 +103,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string
           address: string | null
           company_name: string | null
           created_at: string
@@ -115,6 +116,7 @@ export type Database = {
           smartbee_connected: boolean | null
         }
         Insert: {
+          account_status?: string
           address?: string | null
           company_name?: string | null
           created_at?: string
@@ -127,6 +129,7 @@ export type Database = {
           smartbee_connected?: boolean | null
         }
         Update: {
+          account_status?: string
           address?: string | null
           company_name?: string | null
           created_at?: string
@@ -179,15 +182,46 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_set_account_status: {
+        Args: { _status: string; _user_id: string }
+        Returns: undefined
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -314,6 +348,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
