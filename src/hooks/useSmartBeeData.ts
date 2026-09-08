@@ -2,122 +2,62 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface SmartBeeClient {
-  id: string;
+  id?: string;
   name: string;
   address?: string;
   emails?: string[];
-  phone?: string;
 }
 
 export interface SmartBeeAccount {
-  name: string;
+  name?: string;
   address?: string;
   phone?: string;
   email?: string;
-  taxId?: string; // ח.פ. / ע.מ.
+  taxId?: string;
 }
 
-export interface SmartBeeData {
-  account: SmartBeeAccount | null;
-  clients: SmartBeeClient[];
-  loading: boolean;
-  error: string | null;
-}
-
-export function useSmartBeeData(enabled: boolean): SmartBeeData {
+/**
+ * Charge le compte et les clients depuis SmartBee (Green Invoice),
+ * uniquement si l'utilisateur a enregistré des identifiants SmartBee.
+ */
+export function useSmartBeeData(enabled = true) {
   const [account, setAccount] = useState<SmartBeeAccount | null>(null);
   const [clients, setClients] = useState<SmartBeeClient[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
-
     let cancelled = false;
 
-    const fetchAll = async () => {
+    (async () => {
+      const { data: creds } = await supabase
+        .from("provider_credentials")
+        .select("provider, last_check_ok")
+        .eq("provider", "smartbee")
+        .maybeSingle();
+
+      if (!creds || creds.last_check_ok !== true) return;
+
       setLoading(true);
-      setError(null);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          if (!cancelled) {
-            setAccount(null);
-            setClients([]);
-          }
-          return;
-        }
-
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("smartbee_connected")
-          .eq("id", user.id)
-          .single();
-
-        if (profileError) throw profileError;
-
-        if (!profile?.smartbee_connected) {
-          if (!cancelled) {
-            setAccount(null);
-            setClients([]);
-          }
-          return;
-        }
-
-        const [accountResponse, clientsResponse] = await Promise.all([
-          supabase.functions.invoke("fetch-smartbee", {
-            body: { resource: "account" },
-          }),
-          supabase.functions.invoke("fetch-smartbee", {
-            body: { resource: "clients" },
-          }),
+        const [acc, cli] = await Promise.all([
+          supabase.functions.invoke("fetch-smartbee", { body: { resource: "account" } }),
+          supabase.functions.invoke("fetch-smartbee", { body: { resource: "clients" } }),
         ]);
-
-        const accountMessage = accountResponse.error?.message ?? accountResponse.data?.error;
-        const clientsMessage = clientsResponse.error?.message ?? clientsResponse.data?.error;
-
-        if (accountMessage || clientsMessage) {
-          throw new Error(accountMessage ?? clientsMessage ?? "Erreur");
-        }
-
-        if (!cancelled && accountResponse.data?.success) {
-          const a = accountResponse.data.data;
-          setAccount({
-            name: a.name ?? "",
-            address: a.address ?? "",
-            phone: a.phone ?? "",
-            email: a.email ?? "",
-            taxId: a.taxId ?? a.id ?? "",
-          });
-        }
-
-        if (!cancelled && clientsResponse.data?.success) {
-          const list = clientsResponse.data.data?.items ?? clientsResponse.data.data ?? [];
-          setClients(list.map((c: Record<string, unknown>) => ({
-            id: String(c.id ?? ""),
-            name: String(c.name ?? ""),
-            address: String(c.address ?? ""),
-            emails: Array.isArray(c.emails) ? c.emails : c.email ? [c.email] : [],
-            phone: String(c.phone ?? ""),
-          })));
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Erreur");
-        }
+        if (cancelled) return;
+        if (acc.data?.success) setAccount(acc.data.data ?? null);
+        if (cli.data?.success) setClients((cli.data.data ?? []) as SmartBeeClient[]);
+      } catch {
+        /* silencieux : l'utilisateur peut saisir les infos à la main */
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
-    };
-
-    void fetchAll();
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [enabled]);
 
-  return { account, clients, loading, error };
+  return { account, clients, loading };
 }

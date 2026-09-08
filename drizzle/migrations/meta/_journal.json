@@ -8,6 +8,20 @@
       "when": 1788796476151,
       "tag": "0000_provider_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788836433158,
+      "tag": "0001_account_status_and_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788836550601,
+      "tag": "0002_restrict_profile_insert_columns",
+      "breakpoints": true
     }
   ]
 }
