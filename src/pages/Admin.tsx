@@ -135,6 +135,25 @@ export default function Admin() {
             </div>
           </div>
         ))}
+
+        <h2 className="font-display text-lg text-foreground pt-4 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-invoice-accent" /> Messages reçus
+        </h2>
+        {!loading && messages.length === 0 && (
+          <p className="text-sm text-muted-foreground">Aucun message.</p>
+        )}
+        {messages.map((m) => (
+          <div key={m.id} className="bg-card border border-border rounded-lg p-3 space-y-1">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <p className="text-sm font-medium text-foreground">{m.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.email ?? "—"}{m.phone ? ` · ${m.phone}` : ""} ·{" "}
+                {new Date(m.created_at).toLocaleDateString("fr-FR")}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{m.message}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
