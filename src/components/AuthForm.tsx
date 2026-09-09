@@ -45,7 +45,7 @@ export default function AuthForm() {
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2">
             <FileText className="h-6 w-6 text-invoice-accent" />
-            <span className="font-display text-2xl text-foreground">FacturePro</span>
+            <span className="font-display text-2xl text-foreground">Ma Compta Link</span>
           </div>
           <p className="text-sm text-muted-foreground">
             {isLogin ? "Connectez-vous à votre compte" : "Créez votre compte"}

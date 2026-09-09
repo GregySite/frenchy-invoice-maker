@@ -45,7 +45,7 @@ export default function Index() {
         <div className="max-w-7xl mx-auto flex items-center justify-between px-3 sm:px-4 h-12 sm:h-14">
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-invoice-accent shrink-0" />
-            <span className="font-display text-sm sm:text-lg text-foreground truncate">FacturePro</span>
+            <span className="font-display text-sm sm:text-lg text-foreground truncate">Ma Compta Link</span>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             {/* Mobile toggle */}
