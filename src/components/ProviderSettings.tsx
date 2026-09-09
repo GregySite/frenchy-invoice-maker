@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Settings, CheckCircle2, XCircle, Loader2, ExternalLink, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -29,7 +30,8 @@ export default function ProviderSettings({ onChanged }: Props) {
   const saveAndTest = async (providerId: string) => {
     const creds = values[providerId] ?? {};
     const meta = PROVIDERS.find((p) => p.id === providerId)!;
-    if (meta.fields.some((f) => !creds[f.key]?.trim())) {
+    const requiredFields = meta.fields.filter((f) => f.type !== "checkbox");
+    if (requiredFields.some((f) => !creds[f.key]?.trim())) {
       toast.error("Remplissez tous les champs de cette plateforme.");
       return;
     }
@@ -38,7 +40,10 @@ export default function ProviderSettings({ onChanged }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non connecté");
 
-      const trimmed = Object.fromEntries(Object.entries(creds).map(([k, v]) => [k, v.trim()]));
+      // Les champs checkbox (ex. sandbox) ont déjà une valeur "true"/"false", pas besoin de trim
+      const trimmed = Object.fromEntries(
+        Object.entries(creds).map(([k, v]) => [k, meta.fields.find((f) => f.key === k)?.type === "checkbox" ? v : v.trim()]),
+      );
       const isFirst = rows.filter((r) => Object.keys(r.credentials).length > 0).length === 0;
 
       const { error: upsertError } = await supabase.from("provider_credentials").upsert(
@@ -128,19 +133,34 @@ export default function ProviderSettings({ onChanged }: Props) {
                 )}
 
                 <div className="grid gap-2">
-                  {p.fields.map((f) => (
-                    <div key={f.key} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{f.label}</Label>
-                      <Input
-                        type={f.type ?? "text"}
-                        autoComplete="off"
-                        value={values[p.id]?.[f.key] ?? ""}
-                        onChange={(e) =>
-                          setValues((v) => ({ ...v, [p.id]: { ...(v[p.id] ?? {}), [f.key]: e.target.value } }))
-                        }
-                      />
-                    </div>
-                  ))}
+                  {p.fields.map((f) =>
+                    f.type === "checkbox" ? (
+                      <div key={f.key} className="flex items-center justify-between gap-2 pt-1">
+                        <Label className="text-xs text-muted-foreground">{f.label}</Label>
+                        <Switch
+                          checked={values[p.id]?.[f.key] === "true"}
+                          onCheckedChange={(checked) =>
+                            setValues((v) => ({
+                              ...v,
+                              [p.id]: { ...(v[p.id] ?? {}), [f.key]: checked ? "true" : "false" },
+                            }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div key={f.key} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{f.label}</Label>
+                        <Input
+                          type={f.type ?? "text"}
+                          autoComplete="off"
+                          value={values[p.id]?.[f.key] ?? ""}
+                          onChange={(e) =>
+                            setValues((v) => ({ ...v, [p.id]: { ...(v[p.id] ?? {}), [f.key]: e.target.value } }))
+                          }
+                        />
+                      </div>
+                    ),
+                  )}
                 </div>
 
                 {st?.last_check_ok === false && st.last_check_error && (

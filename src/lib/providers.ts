@@ -1,7 +1,7 @@
 export interface ProviderField {
   key: string;
   label: string;
-  type?: "text" | "password" | "email";
+  type?: "text" | "password" | "email" | "checkbox";
   placeholder?: string;
 }
 
@@ -19,7 +19,7 @@ export const PROVIDERS: ProviderMeta[] = [
     id: "smartbee",
     label: "SmartBee",
     emoji: "🐝",
-    help: 'Paramètres → "הגדרות API" → "הצגת טוקן"',
+    help: '⚠️ Format API non confirmé avec le support SmartBee (limite connue : 600 documents/mois). Paramètres → "הגדרות API" → "הצגת טוקן"',
     link: "https://smartbee.co.il/pc/dealer/update-details/updateUser_api_configuration",
     fields: [{ key: "apiKey", label: "Clé API (Token)", type: "password" }],
   },
@@ -32,6 +32,7 @@ export const PROVIDERS: ProviderMeta[] = [
     fields: [
       { key: "apiKeyId", label: "ID de la clé API", type: "text" },
       { key: "apiKeySecret", label: "Secret de la clé API", type: "password" },
+      { key: "sandbox", label: "Mode test (sandbox, recommandé pour vos essais)", type: "checkbox" },
     ],
   },
   {
@@ -63,7 +64,10 @@ export const PROVIDERS: ProviderMeta[] = [
     emoji: "📗",
     help: "Créez une clé API depuis les paramètres de votre compte",
     link: "https://www.invoice-maven.co.il/",
-    fields: [{ key: "apiKey", label: "Clé API", type: "password" }],
+    fields: [
+      { key: "apiKey", label: "Clé API", type: "password" },
+      { key: "testMode", label: "Mode test (documents de test, non enregistrés)", type: "checkbox" },
+    ],
   },
 ];
 

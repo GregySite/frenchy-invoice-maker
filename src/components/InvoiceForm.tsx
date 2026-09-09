@@ -9,7 +9,8 @@ import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import ClientSearch from "@/components/ClientSearch";
 import { useSmartBeeData, SmartBeeClient } from "@/hooks/useSmartBeeData";
 
-const HAKTZA_THRESHOLD = 10000;
+// Seuil légal du numéro d'allocation (הקצאה) — 5 000 ₪ HT depuis le 1er juin 2026
+const HAKTZA_THRESHOLD = 5000;
 
 export const DOCUMENT_TYPES = [
   { value: "320", label: "Facture + Reçu", hebrew: "חשבונית קבלה" },
@@ -243,7 +244,7 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
           <div>
             <p className="font-medium text-foreground">מספר הקצאה נדרש</p>
             <p className="text-muted-foreground text-xs mt-0.5">
-              Facture HT ≥ 25 000 ₪ — un numéro d'allocation (הקצאה) sera automatiquement demandé via la plateforme choisie.
+              Facture HT ≥ 5 000 ₪ — un numéro d'allocation (הקצאה) sera automatiquement demandé via la plateforme choisie.
             </p>
           </div>
         </div>

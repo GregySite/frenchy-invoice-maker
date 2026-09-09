@@ -62,11 +62,13 @@ export default function ExportButton({ invoice, onExported, refreshKey }: Export
       };
 
       if (!data?.success) {
+        const rawMessage = data?.error ?? "La plateforme a refusé la facture";
+        const withStatus = data?.status ? `[${data.status}] ${rawMessage}` : rawMessage;
         if (user) {
-          await supabase.from("invoices").insert({ ...base, platform_status: "failed", error_message: data?.error ?? "Erreur" });
+          await supabase.from("invoices").insert({ ...base, platform_status: "failed", error_message: withStatus });
         }
         onExported?.();
-        throw new Error(data?.error ?? "La plateforme a refusé la facture");
+        throw new Error(withStatus);
       }
 
       if (user) {
@@ -87,7 +89,9 @@ export default function ExportButton({ invoice, onExported, refreshKey }: Export
       });
       onExported?.();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erreur inconnue");
+      // Toast prolongé pendant la phase de tests réels avec les plateformes,
+      // pour laisser le temps de lire le message brut renvoyé par l'API.
+      toast.error(err instanceof Error ? err.message : "Erreur inconnue", { duration: 15000 });
     } finally {
       setLoading(false);
     }
