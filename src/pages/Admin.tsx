@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Mail } from "lucide-react";
 
 interface Row {
   id: string;
@@ -16,10 +16,20 @@ interface Row {
   created_at: string;
 }
 
+interface ContactMessage {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  message: string;
+  created_at: string;
+}
+
 export default function Admin() {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: statusLoading } = useAccountStatus(user?.id);
   const [rows, setRows] = useState<Row[]>([]);
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +41,11 @@ export default function Admin() {
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     setRows((data ?? []) as Row[]);
+    const { data: msgs } = await supabase
+      .from("contact_messages")
+      .select("id, name, email, phone, message, created_at")
+      .order("created_at", { ascending: false });
+    setMessages((msgs ?? []) as ContactMessage[]);
     setLoading(false);
   }, []);
 
@@ -118,6 +133,25 @@ export default function Admin() {
                 </Button>
               )}
             </div>
+          </div>
+        ))}
+
+        <h2 className="font-display text-lg text-foreground pt-4 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-invoice-accent" /> Messages reçus
+        </h2>
+        {!loading && messages.length === 0 && (
+          <p className="text-sm text-muted-foreground">Aucun message.</p>
+        )}
+        {messages.map((m) => (
+          <div key={m.id} className="bg-card border border-border rounded-lg p-3 space-y-1">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <p className="text-sm font-medium text-foreground">{m.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.email ?? "—"}{m.phone ? ` · ${m.phone}` : ""} ·{" "}
+                {new Date(m.created_at).toLocaleDateString("fr-FR")}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{m.message}</p>
           </div>
         ))}
       </div>
