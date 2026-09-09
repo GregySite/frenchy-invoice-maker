@@ -77,9 +77,15 @@ function fail(status: number, body: unknown): ProviderResult {
 /*   de façon asynchrone -> on interroge GET documents/{requestId}       */
 /*   jusqu'au code 102 (créé) / 103 (brouillon) ou une erreur            */
 /* - test : test.smartbee.co.il/api/v1 ; prod : smartbee.co.il/api/v1    */
-/* ⚠️ Les noms de champs internes de customer / documentItems /          */
-/* receiptDetails / currency ne sont pas visibles dans la doc copiée :   */
-/* à confirmer au premier test (les erreurs 400 nomment le champ).       */
+/* - structure confirmée par l'exemple officiel : customer{name,email,   */
+/*   mainPhone,address,cityName}, currency{currencyType,rate},           */
+/*   documentItems{paymentItems[{description,quantity,pricePerUnit,      */
+/*   vatOption}],discount,roundTotalSum}, receiptDetails{...Items[]}     */
+/* - réponse create : { resultCodeId: 101, result: "<requestId>" }       */
+/* ⚠️ Seul le paiement par carte (creditCardItems) figure dans l'exemple */
+/* officiel ; le nom du tableau "virement" (bankTransferItems ci-dessous)*/
+/* est une hypothèse -> createDraftOnFailure=true crée un brouillon si   */
+/* SmartBee refuse le bloc de paiement.                                  */
 /* ------------------------------------------------------------------ */
 
 const SMARTBEE_BASE_PROD = "https://smartbee.co.il/api/v1";
@@ -180,32 +186,51 @@ const smartbee = {
       providerMsgReferenceId: invoice.invoiceNumber ?? msgId,
       docType: type,
       docDate,
+      createDraftOnFailure: true,
       comments: invoice.notes ?? "",
-      currency: { code: cur },
+      title: "",
+      extraCommentsForEmail: "",
+      isSendOrigEng: false,
+      currency: { currencyType: cur, rate: 0 },
       customer: {
         name: invoice.clientName ?? "",
         email: invoice.clientEmail ?? "",
         address: invoice.clientAddress ?? "",
+        cityName: "",
+        mainPhone: "",
+        comments: "",
       },
     };
     if (invoice.dueDate) payload.dueDate = new Date(invoice.dueDate).toISOString();
     if (type !== "Receipt") {
-      payload.documentItems = invoice.items.map((i) => ({
-        description: i.description,
-        quantity: Number(i.quantity || 0),
-        price: Number(i.unitPrice || 0),
-      }));
+      payload.documentItems = {
+        // Nos prix sont HT -> vatOption "Exclude" (l'exemple officiel montre "Include" pour des prix TTC)
+        paymentItems: invoice.items.map((i) => ({
+          description: i.description,
+          quantity: Number(i.quantity || 0),
+          pricePerUnit: Number(i.unitPrice || 0),
+          vatOption: "Exclude",
+        })),
+        discount: { discountValueType: "Percentage", value: 0 },
+        roundTotalSum: false,
+      };
     }
-    // Reçu / facture-reçu : bloc de paiement obligatoire, somme = total du document
+    // Reçu / facture-reçu : bloc de paiement obligatoire, somme = total TTC du document.
+    // Le formulaire ne collecte pas le mode de paiement -> virement par défaut (clé supposée).
     if (type === "InvoiceReceipt" || type === "Receipt") {
-      payload.receiptDetails = [{ paymentType: "BankTransfer", sum: Number(total.toFixed(2)), date: docDate }];
+      payload.receiptDetails = {
+        bankTransferItems: [{ date: docDate, sum: Number(total.toFixed(2)) }],
+        taxWithholding: 0,
+      };
     }
 
     const { res, body } = await smartbeeCall(creds, token, "documents/create", "POST", payload);
     const b = body as Record<string, unknown>;
     if (!res.ok) return { ok: false, status: res.status, error: smartbeeErrorText(body), raw: body };
-    const requestId = (b?.requestId ?? b?.id ?? (b?.result as Record<string, unknown> | undefined)?.requestId) as string | undefined;
-    if (!requestId) return { ok: false, status: res.status, error: `Pas de requestId dans la réponse : ${JSON.stringify(body).slice(0, 300)}`, raw: body };
+    // Réponse officielle : { resultCodeId: 101, result: "<requestId>" } ; 95 = providerMsgId dupliqué
+    const createCode = b?.resultCodeId as number | undefined;
+    const requestId = typeof b?.result === "string" ? (b.result as string) : undefined;
+    if (createCode !== 101 || !requestId) return { ok: false, status: res.status, error: smartbeeErrorText(body), raw: body };
 
     // Polling du résultat (le document est créé de façon asynchrone)
     for (let attempt = 0; attempt < 12; attempt++) {
