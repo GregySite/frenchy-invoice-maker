@@ -19,9 +19,12 @@ export const PROVIDERS: ProviderMeta[] = [
     id: "smartbee",
     label: "SmartBee",
     emoji: "🐝",
-    help: '⚠️ Format API non confirmé avec le support SmartBee (limite connue : 600 documents/mois). Paramètres → "הגדרות API" → "הצגת טוקן"',
-    link: "https://smartbee.co.il/pc/dealer/update-details/updateUser_api_configuration",
-    fields: [{ key: "apiKey", label: "Clé API (Token)", type: "password" }],
+    help: "Token utilisateur (providerUserToken) à demander au support SmartBee pour votre compte. Limite connue : 600 documents/mois.",
+    link: "https://smartbee.co.il/",
+    fields: [
+      { key: "providerUserToken", label: "Token utilisateur SmartBee", type: "password" },
+      { key: "sandbox", label: "Mode test (serveur test.smartbee.co.il)", type: "checkbox" },
+    ],
   },
   {
     id: "greeninvoice",

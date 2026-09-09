@@ -66,59 +66,169 @@ function fail(status: number, body: unknown): ProviderResult {
 }
 
 /* ------------------------------------------------------------------ */
-/* SmartBee (smartbee.co.il) — clé API unique envoyée dans le body      */
-/* ⚠️ SmartBee annonce un "API ouvert" (limite 600 documents/mois en    */
-/* génération automatique) mais aucune documentation publique complète  */
-/* n'a été trouvée. Le format ci-dessous est une supposition basée sur  */
-/* le pattern des autres plateformes — contacter le support SmartBee    */
-/* pour la vraie doc + des identifiants de test avant le premier envoi. */
+/* SmartBee — API v1 "fournisseur" + file d'attente                      */
+/* Source : doc officielle smartbeev1.docs.apiary.io                     */
+/* - NOTRE site est le fournisseur agréé : clientId + password (obtenus  */
+/*   auprès du support SmartBee) -> secrets Supabase SMARTBEE_CLIENT_ID  */
+/*   et SMARTBEE_CLIENT_PASSWORD ; POST login/authenticate -> Bearer     */
+/* - chaque compte client est identifié par son providerUserToken        */
+/*   (fourni par le support SmartBee) -> saisi par l'utilisateur         */
+/* - POST documents/create renvoie un requestId ; le document est créé   */
+/*   de façon asynchrone -> on interroge GET documents/{requestId}       */
+/*   jusqu'au code 102 (créé) / 103 (brouillon) ou une erreur            */
+/* - test : test.smartbee.co.il/api/v1 ; prod : smartbee.co.il/api/v1    */
+/* ⚠️ Les noms de champs internes de customer / documentItems /          */
+/* receiptDetails / currency ne sont pas visibles dans la doc copiée :   */
+/* à confirmer au premier test (les erreurs 400 nomment le champ).       */
 /* ------------------------------------------------------------------ */
 
-const SMARTBEE_BASE = Deno.env.get("SMARTBEE_BASE_URL") ?? "https://smartbee.co.il/api/v1";
+const SMARTBEE_BASE_PROD = "https://smartbee.co.il/api/v1";
+const SMARTBEE_BASE_TEST = "https://test.smartbee.co.il/api/v1";
+const SMARTBEE_CLIENT_ID = Deno.env.get("SMARTBEE_CLIENT_ID") ?? "";
+const SMARTBEE_CLIENT_PASSWORD = Deno.env.get("SMARTBEE_CLIENT_PASSWORD") ?? "";
 
-async function smartbeeCall(apiKey: string, path: string, payload: Record<string, unknown> = {}) {
-  const res = await fetch(`${SMARTBEE_BASE}${path}`, {
+function smartbeeBase(creds: Record<string, string>) {
+  return creds.sandbox === "true" ? SMARTBEE_BASE_TEST : SMARTBEE_BASE_PROD;
+}
+
+// Nos codes internes -> docType SmartBee
+function smartbeeDocType(documentType?: string): string {
+  const map: Record<string, string> = {
+    "320": "InvoiceReceipt", "305": "Invoice", "400": "Receipt", "330": "RefundInvoice", "10": "PriceProposal", "100": "OrderConfirmation",
+  };
+  return map[documentType ?? "320"] ?? "InvoiceReceipt";
+}
+
+const SMARTBEE_CODES: Record<number, string> = {
+  1: "Requête en file d'attente", 94: "Compte non autorisé (pas de bundle API ou action non permise)", 95: "Requête dupliquée (providerMsgId déjà utilisé)",
+  96: "Erreur de validation", 97: "Identifiant de requête invalide", 98: "Identifiants invalides", 99: "Erreur générale",
+  101: "Requête créée, en attente", 102: "Document créé", 103: "Brouillon créé", 199: "Erreur de création du document",
+};
+
+async function smartbeeToken(creds: Record<string, string>): Promise<string> {
+  if (!SMARTBEE_CLIENT_ID || !SMARTBEE_CLIENT_PASSWORD) {
+    throw new Error("Secrets SMARTBEE_CLIENT_ID / SMARTBEE_CLIENT_PASSWORD manquants côté serveur (à obtenir auprès du support SmartBee)");
+  }
+  const res = await fetch(`${smartbeeBase(creds)}/login/authenticate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Api-Key": apiKey },
-    body: JSON.stringify({ apiKey, ...payload }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId: SMARTBEE_CLIENT_ID, password: SMARTBEE_CLIENT_PASSWORD }),
+  });
+  const body = await readBody(res);
+  const b = (typeof body === "object" && body ? body : {}) as Record<string, unknown>;
+  const token = (b.token ?? b.accessToken ?? b.access_token ?? (b.result as Record<string, unknown> | undefined)?.token) as string | undefined;
+  if (!res.ok || !token) throw new Error(`[${res.status}] Authentification SmartBee refusée : ${typeof body === "string" ? body.slice(0, 300) : JSON.stringify(body).slice(0, 300)}`);
+  return token;
+}
+
+async function smartbeeCall(creds: Record<string, string>, token: string, path: string, method: "GET" | "POST", payload?: Record<string, unknown>) {
+  const res = await fetch(`${smartbeeBase(creds)}/${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: payload ? JSON.stringify(payload) : undefined,
   });
   return { res, body: await readBody(res) };
 }
 
+function smartbeeErrorText(body: unknown): string {
+  const b = body as Record<string, unknown>;
+  const code = b?.resultCodeId as number | undefined;
+  const parts: string[] = [];
+  if (code != null) parts.push(`${SMARTBEE_CODES[code] ?? "Code"} (${code})`);
+  if (b?.validationErrors) parts.push(JSON.stringify(b.validationErrors));
+  if (b?.errors) parts.push(JSON.stringify(b.errors));
+  if (b?.title && parts.length === 0) parts.push(String(b.title));
+  return parts.length ? parts.join(" — ").slice(0, 500) : JSON.stringify(body).slice(0, 500);
+}
+
 const smartbee = {
   async verify(creds: Record<string, string>): Promise<ProviderResult> {
-    if (!creds.apiKey) return { ok: false, status: 400, error: "Clé API manquante" };
-    const { res, body } = await smartbeeCall(creds.apiKey, "/user/me");
-    return res.ok ? { ok: true, status: res.status, raw: body } : fail(res.status, body);
+    if (!creds.providerUserToken) return { ok: false, status: 400, error: "Token utilisateur SmartBee (providerUserToken) manquant" };
+    let token: string;
+    try {
+      token = await smartbeeToken(creds);
+    } catch (e) {
+      return { ok: false, status: 401, error: (e as Error).message };
+    }
+    // Vérification non destructive : une recherche de documents avec le token du compte
+    const { res, body } = await smartbeeCall(creds, token, "documents/search", "POST", {
+      providerUserToken: creds.providerUserToken, page: 0, amountPerPage: 1,
+    });
+    const b = body as Record<string, unknown>;
+    if (!res.ok || (b?.resultCodeId != null && b.resultCodeId !== 120)) {
+      return { ok: false, status: res.ok ? 401 : res.status, error: smartbeeErrorText(body), raw: body };
+    }
+    return { ok: true, status: res.status, raw: body };
   },
   async create(creds: Record<string, string>, invoice: InvoiceInput): Promise<ProviderResult> {
-    const { vat } = totals(invoice);
-    const payload = {
-      type: Number(invoice.documentType ?? 320),
-      lang: "he",
-      currency: currencyCode(invoice.currency),
-      vatType: 0,
-      description: invoice.notes ?? "",
-      remarks: invoice.notes ?? "",
-      client: {
+    if (!creds.providerUserToken) return { ok: false, status: 400, error: "Token utilisateur SmartBee (providerUserToken) manquant" };
+    let token: string;
+    try {
+      token = await smartbeeToken(creds);
+    } catch (e) {
+      return { ok: false, status: 401, error: (e as Error).message };
+    }
+    const type = smartbeeDocType(invoice.documentType);
+    const { total } = totals(invoice);
+    const cur = currencyCode(invoice.currency);
+    const docDate = new Date(invoice.date || Date.now()).toISOString();
+    const msgId = `frenchy-${invoice.invoiceNumber || Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+
+    const payload: Record<string, unknown> = {
+      providerUserToken: creds.providerUserToken,
+      providerMsgId: msgId,
+      providerMsgReferenceId: invoice.invoiceNumber ?? msgId,
+      docType: type,
+      docDate,
+      comments: invoice.notes ?? "",
+      currency: { code: cur },
+      customer: {
         name: invoice.clientName ?? "",
-        emails: invoice.clientEmail ? [invoice.clientEmail] : [],
+        email: invoice.clientEmail ?? "",
         address: invoice.clientAddress ?? "",
-        add: true,
       },
-      income: invoice.items.map((i) => ({
+    };
+    if (invoice.dueDate) payload.dueDate = new Date(invoice.dueDate).toISOString();
+    if (type !== "Receipt") {
+      payload.documentItems = invoice.items.map((i) => ({
         description: i.description,
         quantity: Number(i.quantity || 0),
         price: Number(i.unitPrice || 0),
-        currency: currencyCode(invoice.currency),
-        vatType: 0,
-      })),
-      vat,
-    };
-    const { res, body } = await smartbeeCall(creds.apiKey, "/documents", payload);
-    if (!res.ok) return fail(res.status, body);
-    const b = body as Record<string, string>;
-    return { ok: true, status: res.status, externalId: b?.id, externalNumber: b?.number, pdfUrl: b?.url ?? b?.pdfUrl, raw: body };
+      }));
+    }
+    // Reçu / facture-reçu : bloc de paiement obligatoire, somme = total du document
+    if (type === "InvoiceReceipt" || type === "Receipt") {
+      payload.receiptDetails = [{ paymentType: "BankTransfer", sum: Number(total.toFixed(2)), date: docDate }];
+    }
+
+    const { res, body } = await smartbeeCall(creds, token, "documents/create", "POST", payload);
+    const b = body as Record<string, unknown>;
+    if (!res.ok) return { ok: false, status: res.status, error: smartbeeErrorText(body), raw: body };
+    const requestId = (b?.requestId ?? b?.id ?? (b?.result as Record<string, unknown> | undefined)?.requestId) as string | undefined;
+    if (!requestId) return { ok: false, status: res.status, error: `Pas de requestId dans la réponse : ${JSON.stringify(body).slice(0, 300)}`, raw: body };
+
+    // Polling du résultat (le document est créé de façon asynchrone)
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const poll = await smartbeeCall(creds, token, `documents/${requestId}`, "GET");
+      const pb = poll.body as Record<string, unknown>;
+      const code = pb?.resultCodeId as number | undefined;
+      if (code === 1 || code === 101) continue;
+      if (code === 102 || code === 103) {
+        const r = (pb?.result ?? {}) as Record<string, unknown>;
+        const pdfKey = Object.keys(r).find((k) => /pdf|url|link/i.test(k) && typeof r[k] === "string");
+        return {
+          ok: true,
+          status: 200,
+          externalId: String(requestId),
+          externalNumber: r.documentIndex != null ? String(r.documentIndex) : r.index != null ? String(r.index) : undefined,
+          pdfUrl: pdfKey ? (r[pdfKey] as string) : undefined,
+          raw: poll.body,
+        };
+      }
+      return { ok: false, status: 200, error: smartbeeErrorText(poll.body), raw: poll.body };
+    }
+    return { ok: false, status: 202, error: `Document en attente de traitement chez SmartBee (requestId ${requestId}) — réessayez de vérifier plus tard`, raw: body };
   },
 };
 
