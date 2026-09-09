@@ -17,8 +17,8 @@ export const DOCUMENT_TYPES = [
   { value: "305", label: "Facture TVA", hebrew: "חשבונית מס" },
   { value: "400", label: "Reçu", hebrew: "קבלה" },
   { value: "330", label: "Avoir / Crédit", hebrew: "זיכוי" },
-  { value: "100", label: "Devis", hebrew: "הצעת מחיר" },
-  { value: "200", label: "Bon de commande", hebrew: "הזמנה" },
+  { value: "10", label: "Devis", hebrew: "הצעת מחיר" },
+  { value: "100", label: "Bon de commande", hebrew: "הזמנה" },
 ];
 
 interface InvoiceFormProps {

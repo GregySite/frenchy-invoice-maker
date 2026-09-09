@@ -11,7 +11,7 @@ export interface InvoiceItemInput {
 
 export interface InvoiceInput {
   invoiceNumber?: string;
-  documentType?: string; // code Green Invoice/SmartBee (320, 305, 400...)
+  documentType?: string; // codes Green Invoice : 320 facture-reçu, 305 facture, 400 reçu, 330 avoir, 10 devis, 100 commande
   date?: string;
   dueDate?: string;
   currency?: string; // ₪ € $
@@ -162,26 +162,43 @@ const greeninvoice = {
     } catch (e) {
       return { ok: false, status: 401, error: (e as Error).message };
     }
-    const payload = {
-      type: Number(invoice.documentType ?? 320),
+    const type = Number(invoice.documentType ?? 320);
+    const cur = currencyCode(invoice.currency);
+    const { total } = totals(invoice);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const payload: Record<string, unknown> = {
+      type,
       lang: "he",
-      currency: currencyCode(invoice.currency),
-      vatType: 0,
+      currency: cur,
+      vatType: 0, // 0 = TVA appliquée selon le type d'entreprise (défaut Green Invoice)
       remarks: invoice.notes ?? "",
+      signed: true,
       client: {
         name: invoice.clientName ?? "",
         emails: invoice.clientEmail ? [invoice.clientEmail] : [],
         address: invoice.clientAddress ?? "",
         add: true,
       },
-      income: invoice.items.map((i) => ({
+    };
+    if (invoice.date) payload.date = invoice.date;
+    if (invoice.dueDate) payload.dueDate = invoice.dueDate;
+    // Un reçu (400) ne porte que des paiements ; les autres types portent des lignes
+    if (type !== 400) {
+      payload.income = invoice.items.map((i) => ({
         description: i.description,
         quantity: Number(i.quantity || 0),
         price: Number(i.unitPrice || 0),
-        currency: currencyCode(invoice.currency),
+        currency: cur,
         vatType: 0,
-      })),
-    };
+      }));
+    }
+    // Facture-reçu (320) et reçu (400) exigent un tableau "payment" ; le formulaire ne
+    // collecte pas encore le mode de paiement -> virement (type 4) par défaut, montant TTC.
+    if (type === 320 || type === 400) {
+      payload.payment = [{ date: invoice.date || today, type: 4, price: Number(total.toFixed(2)), currency: cur }];
+    }
+
     const res = await fetch(`${giBase(creds)}/documents`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -189,190 +206,196 @@ const greeninvoice = {
     });
     const body = await readBody(res);
     if (!res.ok) return fail(res.status, body);
-    const b = body as Record<string, string>;
-    return { ok: true, status: res.status, externalId: b?.id, externalNumber: String(b?.number ?? ""), pdfUrl: b?.url, raw: body };
+    const b = body as Record<string, unknown>;
+    const url = b?.url as Record<string, string> | string | undefined;
+    const links = (b?.files as Record<string, unknown> | undefined)?.downloadLinks as Record<string, string> | undefined;
+    const pdfUrl = typeof url === "string" ? url : url?.origin ?? links?.he ?? links?.en;
+    return { ok: true, status: res.status, externalId: b?.id != null ? String(b.id) : undefined, externalNumber: b?.number != null ? String(b.number) : undefined, pdfUrl, raw: body };
   },
 };
 
 /* ------------------------------------------------------------------ */
-/* Invoice4U — login email/mot de passe -> token                        */
+/* Invoice4U — clé API (GUID) + JSON "WCF wrapped-request"              */
+/* Source : spec OpenAPI officielle                                     */
+/* github.com/invoice4udev-hue/i4u-docs/openapi/invoice4u-openapi.json  */
+/* - POST {base}/{Opération} avec body JSON { ...params, token }        */
+/* - réponse enveloppée dans "{Opération}Result", erreurs dans .Errors  */
+/* - le login email/mot de passe n'est PLUS accepté : clé API seulement */
+/* - environnement QA (sandbox) : apiqa.invoice4u.co.il                 */
 /* ------------------------------------------------------------------ */
 
-// Invoice4U expose une API SOAP/WSDL (WCF classique), pas du JSON REST.
-// ⚠️ Les noms d'opération/paramètres ci-dessous suivent les conventions WCF par défaut
-// (namespace "http://tempuri.org/") et le wrapper communautaire "i4u" (github.com/ofersadan85/i4u),
-// faute d'accès à la doc officielle (invoice4uapi.docs.apiary.io, bloquée aux robots).
-// À VÉRIFIER/AJUSTER à la première vraie tentative avec de vrais identifiants — les erreurs
-// SOAP brutes sont renvoyées telles quelles pour permettre ce réglage.
-const I4U_BASE = "https://api.invoice4u.co.il/Services/ApiService.svc";
-const I4U_NS = "http://tempuri.org/";
+const I4U_BASE_PROD = "https://api.invoice4u.co.il/Services/ApiService.svc";
+const I4U_BASE_QA = "https://apiqa.invoice4u.co.il/Services/ApiService.svc";
 
-function soapEnvelope(action: string, innerXml: string) {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="${I4U_NS}">
-  <soap:Body>
-    <tem:${action}>${innerXml}</tem:${action}>
-  </soap:Body>
-</soap:Envelope>`;
+function i4uBase(creds: Record<string, string>) {
+  return creds.sandbox === "true" ? I4U_BASE_QA : I4U_BASE_PROD;
 }
 
-function xmlTag(xml: string, tag: string): string | undefined {
-  const m = xml.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>([^<]*)</(?:\\w+:)?${tag}>`, "i"));
-  return m?.[1];
+// Nos codes internes (Green Invoice/SmartBee) -> types Invoice4U
+// 1 Invoice, 2 Receipt, 3 InvoiceReceipt, 4 InvoiceCredit, 6 InvoiceOrder, 7 InvoiceQuote
+function i4uDocType(documentType?: string): number {
+  const map: Record<string, number> = { "320": 3, "305": 1, "400": 2, "330": 4, "10": 7, "100": 6 };
+  return map[documentType ?? "320"] ?? 3;
 }
 
-function xmlEscape(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+interface I4UError { ID?: number; Error?: string; Paramters?: string | null }
+
+function i4uErrors(result: unknown): string | null {
+  const errs = (result as { Errors?: I4UError[] } | null)?.Errors;
+  if (!Array.isArray(errs) || errs.length === 0) return null;
+  return errs
+    .map((e) => `${e.Error ?? "Erreur"}${e.ID != null ? ` (${e.ID})` : ""}${e.Paramters ? ` – ${e.Paramters}` : ""}`)
+    .join(" ; ");
 }
 
-async function i4uSoapCall(action: string, innerXml: string) {
-  const res = await fetch(I4U_BASE, {
+async function i4uCall(creds: Record<string, string>, op: string, params: Record<string, unknown> = {}) {
+  const res = await fetch(`${i4uBase(creds)}/${op}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: `${I4U_NS}IApiService/${action}`,
-    },
-    body: soapEnvelope(action, innerXml),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...params, token: creds.apiKey }),
   });
-  const text = await res.text();
-  return { res, text };
-}
-
-async function i4uLogin(creds: Record<string, string>): Promise<string> {
-  const { res, text } = await i4uSoapCall(
-    "Login",
-    `<tem:userName>${xmlEscape(creds.email ?? "")}</tem:userName><tem:password>${xmlEscape(creds.password ?? "")}</tem:password>`,
-  );
-  const token = xmlTag(text, "LoginResult");
-  if (!res.ok || !token || token === "null" || /soap:Fault|<Fault/i.test(text)) {
-    throw new Error(`[${res.status}] ${text.slice(0, 500)}`);
-  }
-  return token;
+  const body = await readBody(res);
+  const result = typeof body === "object" && body !== null ? (body as Record<string, unknown>)[`${op}Result`] : undefined;
+  return { res, body, result };
 }
 
 const invoice4u = {
   async verify(creds: Record<string, string>): Promise<ProviderResult> {
-    if (!creds.email || !creds.password) return { ok: false, status: 400, error: "Email et mot de passe requis" };
-    try {
-      await i4uLogin(creds);
-      return { ok: true, status: 200 };
-    } catch (e) {
-      return { ok: false, status: 401, error: (e as Error).message };
-    }
+    if (!creds.apiKey) return { ok: false, status: 400, error: "Clé API Invoice4U manquante" };
+    const { res, body, result } = await i4uCall(creds, "IsAuthenticated");
+    if (!res.ok) return fail(res.status, body);
+    const err = i4uErrors(result);
+    if (err || !result) return { ok: false, status: 401, error: err ?? "Clé API refusée (réponse vide)", raw: body };
+    return { ok: true, status: res.status, raw: body };
   },
   async create(creds: Record<string, string>, invoice: InvoiceInput): Promise<ProviderResult> {
-    let token: string;
-    try {
-      token = await i4uLogin(creds);
-    } catch (e) {
-      return { ok: false, status: 401, error: (e as Error).message };
+    if (!creds.apiKey) return { ok: false, status: 400, error: "Clé API Invoice4U manquante" };
+    const type = i4uDocType(invoice.documentType);
+    const { total } = totals(invoice);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const doc: Record<string, unknown> = {
+      DocumentType: type,
+      Subject: invoice.items[0]?.description ?? "",
+      GeneralCustomer: { Name: invoice.clientName ?? "" },
+      Currency: currencyCode(invoice.currency),
+      TaxIncluded: false,
+      Language: 1, // 1 = hébreu, 2 = anglais
+      ExternalComments: invoice.notes ?? "",
+      ApiIdentifier: invoice.invoiceNumber ? `frenchy-${invoice.invoiceNumber}` : undefined,
+      AutoFixPaymentsMismatchItems: true,
+    };
+    if (invoice.vatRate != null) doc.TaxPercentage = Number(invoice.vatRate);
+    if (invoice.dueDate) doc.PaymentDueDate = `${invoice.dueDate}T00:00:00`;
+    if (invoice.clientEmail) doc.AssociatedEmails = [{ Mail: invoice.clientEmail, IsUserMail: false }];
+    // Un reçu (type 2) ne porte pas de lignes, uniquement des paiements
+    if (type !== 2) {
+      doc.Items = invoice.items.map((i) => ({
+        Name: i.description,
+        Quantity: Number(i.quantity || 0),
+        Price: Number(i.unitPrice || 0),
+      }));
     }
-    const itemsXml = invoice.items
-      .map(
-        (i) => `<tem:DocumentItem>
-          <tem:Name>${xmlEscape(i.description)}</tem:Name>
-          <tem:Quantity>${Number(i.quantity || 0)}</tem:Quantity>
-          <tem:Price>${Number(i.unitPrice || 0)}</tem:Price>
-        </tem:DocumentItem>`,
-      )
-      .join("");
-    const innerXml = `
-      <tem:token>${xmlEscape(token)}</tem:token>
-      <tem:doc>
-        <tem:DocumentType>3</tem:DocumentType>
-        <tem:Subject>${xmlEscape(invoice.notes ?? "")}</tem:Subject>
-        <tem:Currency>${currencyCode(invoice.currency)}</tem:Currency>
-        <tem:GeneralCustomer>
-          <tem:Name>${xmlEscape(invoice.clientName ?? "")}</tem:Name>
-          <tem:Email>${xmlEscape(invoice.clientEmail ?? "")}</tem:Email>
-          <tem:Address>${xmlEscape(invoice.clientAddress ?? "")}</tem:Address>
-        </tem:GeneralCustomer>
-        <tem:Items>${itemsXml}</tem:Items>
-      </tem:doc>`;
-    const { res, text } = await i4uSoapCall("CreateDocument", innerXml);
-    if (!res.ok || /soap:Fault|<Fault/i.test(text)) return fail(res.status, text.slice(0, 500));
+    // Reçu et Facture-reçu exigent des paiements ; le formulaire ne collecte pas encore
+    // le mode de paiement -> virement (3) par défaut, du montant TTC calculé.
+    if (type === 2 || type === 3) {
+      doc.Payments = [{ PaymentType: 3, Amount: Number(total.toFixed(2)), Date: `${today}T00:00:00`, NumberOfPayments: 1 }];
+    }
+
+    const { res, body, result } = await i4uCall(creds, "CreateDocument", { doc });
+    if (!res.ok) return fail(res.status, body);
+    const err = i4uErrors(result);
+    if (err || !result) return { ok: false, status: res.status, error: err ?? "Réponse vide d'Invoice4U", raw: body };
+    const r = result as Record<string, unknown>;
     return {
       ok: true,
       status: res.status,
-      externalId: xmlTag(text, "ID"),
-      externalNumber: xmlTag(text, "DocumentNumber"),
-      pdfUrl: xmlTag(text, "DocumentLink"),
-      raw: text.slice(0, 2000),
+      externalId: r.ID != null ? String(r.ID) : undefined,
+      externalNumber: r.DocumentNumber != null ? String(r.DocumentNumber) : undefined,
+      pdfUrl: (r.PrintOriginalPDFLink as string) ?? (r.PrintCertifiedCopyPDFLink as string) ?? undefined,
+      raw: body,
     };
   },
 };
 
 /* ------------------------------------------------------------------ */
-/* iCount — cid / user / pass                                           */
+/* iCount — token API (Bearer), API v3                                  */
+/* Source : connecteur open-source n8n-nodes-icount (npm, 330 tests) et */
+/* plugin WooCommerce officiel iCount — "You must use an API Token,     */
+/* not cid/user/pass". Token créé dans iCount : הגדרות → API.            */
+/* - POST https://api.icount.co.il/api/v3.php/doc/create (JSON)         */
+/* - vérification : GET /api/v3.php/app/info                            */
+/* - réponse : { status, doc_number, pdf_link, doc_id } (parfois .data) */
 /* ------------------------------------------------------------------ */
 
 const ICOUNT_BASE = "https://api.icount.co.il/api/v3.php";
 
-// Ouvre une session iCount (sid) à partir de cid/user/pass — à réutiliser plutôt
-// que de renvoyer le mot de passe à chaque appel.
-async function icountLogin(creds: Record<string, string>): Promise<string> {
-  const res = await fetch(`${ICOUNT_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cid: creds.companyId, user: creds.user, pass: creds.password }),
+// Nos codes internes -> doctypes iCount (invoice, invrec, receipt, refund, order, offer, delivery, deal)
+function icountDocType(documentType?: string): string {
+  const map: Record<string, string> = { "320": "invrec", "305": "invoice", "400": "receipt", "330": "refund", "10": "offer", "100": "order" };
+  return map[documentType ?? "320"] ?? "invrec";
+}
+
+async function icountCall(creds: Record<string, string>, path: string, method: "GET" | "POST", payload?: Record<string, unknown>) {
+  const res = await fetch(`${ICOUNT_BASE}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${creds.apiKey}`, "Content-Type": "application/json" },
+    body: payload ? JSON.stringify(payload) : undefined,
   });
-  const body = await readBody(res);
+  return { res, body: await readBody(res) };
+}
+
+function icountError(body: unknown): string {
   const b = body as Record<string, unknown>;
-  if (!res.ok || b?.status !== true || !b?.sid) {
-    throw new Error(`[${res.status}] ${typeof body === "string" ? body : JSON.stringify(body)}`);
-  }
-  return b.sid as string;
+  return (b?.message as string) ?? (b?.error_description as string) ?? (b?.error as string) ?? JSON.stringify(body).slice(0, 500);
 }
 
 const icount = {
   async verify(creds: Record<string, string>): Promise<ProviderResult> {
-    if (!creds.companyId || !creds.user || !creds.password) {
-      return { ok: false, status: 400, error: "Identifiant société, utilisateur et mot de passe requis" };
-    }
-    try {
-      await icountLogin(creds);
-      return { ok: true, status: 200 };
-    } catch (e) {
-      return { ok: false, status: 401, error: (e as Error).message };
-    }
+    if (!creds.apiKey) return { ok: false, status: 400, error: "Token API iCount manquant" };
+    const { res, body } = await icountCall(creds, "/app/info", "GET");
+    const b = body as Record<string, unknown>;
+    if (!res.ok || b?.status === false) return { ok: false, status: res.ok ? 401 : res.status, error: icountError(body), raw: body };
+    return { ok: true, status: res.status, raw: body };
   },
   async create(creds: Record<string, string>, invoice: InvoiceInput): Promise<ProviderResult> {
-    let sid: string;
-    try {
-      sid = await icountLogin(creds);
-    } catch (e) {
-      return { ok: false, status: 401, error: (e as Error).message };
-    }
-    const payload = {
-      cid: creds.companyId,
-      sid,
-      doctype: "invrec",
-      client_name: invoice.clientName ?? "",
-      email: invoice.clientEmail ?? "",
-      client_address: invoice.clientAddress ?? "",
-      currency_code: currencyCode(invoice.currency),
+    if (!creds.apiKey) return { ok: false, status: 400, error: "Token API iCount manquant" };
+    const type = icountDocType(invoice.documentType);
+    const { total } = totals(invoice);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const payload: Record<string, unknown> = {
+      doctype: type,
       lang: "he",
-      hwc: invoice.notes ?? "",
+      currency_code: currencyCode(invoice.currency),
+      client_name: invoice.clientName ?? "",
       items: invoice.items.map((i) => ({
         description: i.description,
         quantity: Number(i.quantity || 0),
         unitprice: Number(i.unitPrice || 0),
       })),
     };
-    const res = await fetch(`${ICOUNT_BASE}/doc/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await readBody(res);
+    if (invoice.clientEmail) payload.email = invoice.clientEmail;
+    if (invoice.clientAddress) payload.client_address = invoice.clientAddress;
+    if (invoice.notes) payload.hwc = invoice.notes;
+    if (invoice.date) payload.doc_date = invoice.date;
+    if (invoice.dueDate) payload.duedate = invoice.dueDate;
+    // Reçu et facture-reçu exigent un paiement ; le formulaire ne collecte pas encore
+    // le mode de paiement -> virement bancaire par défaut, du montant TTC calculé.
+    if (type === "invrec" || type === "receipt") {
+      payload.banktransfer = { sum: total.toFixed(2), date: invoice.date || today };
+    }
+
+    const { res, body } = await icountCall(creds, "/doc/create", "POST", payload);
     const b = body as Record<string, unknown>;
-    if (!res.ok || b?.status !== true) return fail(res.status, body);
+    if (!res.ok || b?.status === false) return { ok: false, status: res.status, error: icountError(body), raw: body };
+    const d = ((b?.data as Record<string, unknown>) ?? b) as Record<string, unknown>;
     return {
       ok: true,
       status: res.status,
-      externalId: String(b?.docnum ?? ""),
-      externalNumber: String(b?.docnum ?? ""),
-      pdfUrl: (b?.doc_url as string) ?? undefined,
+      externalId: d?.doc_id != null ? String(d.doc_id) : undefined,
+      externalNumber: d?.doc_number != null ? String(d.doc_number) : (d?.docnum != null ? String(d.docnum) : undefined),
+      pdfUrl: (d?.pdf_link as string) ?? (d?.doc_url as string) ?? undefined,
       raw: body,
     };
   },
@@ -392,14 +415,14 @@ const MAVEN_CONTACT_PHONE = Deno.env.get("INVOICEMAVEN_CONTACT_PHONE") ?? "";
 
 function mavenDocType(documentType?: string) {
   // Mappe nos codes internes (partagés avec Green Invoice/SmartBee) vers les codes Invoice Maven
-  const map: Record<string, number> = { "320": 320, "305": 305, "400": 400, "330": 330, "100": 10, "200": 100 };
+  const map: Record<string, number> = { "320": 320, "305": 305, "400": 400, "330": 330, "10": 10, "100": 100 };
   return map[documentType ?? "320"] ?? 320;
 }
 
-async function mavenCall(creds: Record<string, string>, extra: Record<string, unknown>) {
+async function mavenCall(creds: Record<string, string>, extra: Record<string, unknown>, forceTest = false) {
   const payload = {
     api_key: creds.apiKey,
-    test: creds.testMode === "true" ? 1 : 0,
+    test: forceTest || creds.testMode === "true" ? 1 : 0,
     contact_email: MAVEN_CONTACT_EMAIL,
     contact_phone: MAVEN_CONTACT_PHONE,
     ...extra,
@@ -418,31 +441,49 @@ const invoicemaven = {
     // Invoice Maven n'a pas d'endpoint de vérification dédié : on tente une émission
     // en mode test (test=1, aucun document réel n'est créé ni envoyé au client).
     const { res, body } = await mavenCall(creds, {
-      doc_type: 320,
+      doc_type: 305, // facture simple : aucun paiement requis pour ce test
       customer: { name: "Test de connexion" },
       items: [{ description: "Vérification API", price: 1 }],
-    });
+    }, true);
     const b = body as Record<string, unknown>;
     return res.ok && b?.status_code === 0
       ? { ok: true, status: res.status, raw: body }
       : fail(res.status, body);
   },
   async create(creds: Record<string, string>, invoice: InvoiceInput): Promise<ProviderResult> {
-    const { res, body } = await mavenCall(creds, {
-      doc_type: mavenDocType(invoice.documentType),
+    const type = mavenDocType(invoice.documentType);
+    const { total } = totals(invoice);
+    const toMavenDate = (iso?: string) => {
+      const d = iso ? new Date(iso) : new Date();
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      return `${dd}/${mm}/${d.getFullYear()}`; // format dd/MM/yyyy exigé par Invoice Maven
+    };
+    const extra: Record<string, unknown> = {
+      doc_type: type,
       remarks: invoice.notes ?? "",
-      english_document: invoice.currency === "₪" ? 0 : 1,
+      english_document: 0, // document en hébreu
       customer: {
         name: invoice.clientName ?? "",
         email: invoice.clientEmail ?? "",
         address: invoice.clientAddress ?? "",
       },
-      items: invoice.items.map((i) => ({
+    };
+    if (invoice.dueDate) extra.due_date = toMavenDate(invoice.dueDate);
+    // Un reçu (400) ne doit pas porter de lignes (doc officielle)
+    if (type !== 400) {
+      extra.items = invoice.items.map((i) => ({
         description: i.description,
         quantity: Number(i.quantity || 1),
         price: Number(i.unitPrice || 0),
-      })),
-    });
+      }));
+    }
+    // Reçu (400) et facture-reçu (320) exigent des paiements ; le formulaire ne collecte
+    // pas encore le mode de paiement -> virement bancaire (payment_type 1), montant TTC.
+    if (type === 320 || type === 400) {
+      extra.payments = [{ payment_date: toMavenDate(invoice.date), payment_type: 1, amount: Number(total.toFixed(2)) }];
+    }
+    const { res, body } = await mavenCall(creds, extra);
     const b = body as Record<string, unknown>;
     if (!res.ok || b?.status_code !== 0) return fail(res.status, body);
     return {
